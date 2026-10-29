@@ -40,9 +40,6 @@
 ** You can use it any way you like.
 */
 
-extern int              g_NMEAXTEPrecision;
-
-
 XTE::XTE()
 {
    Mnemonic = _T("XTE");
@@ -71,9 +68,9 @@ bool XTE::Parse( const SENTENCE& sentence )
 
    /*
    ** XTE - Autopilot Sentence
-   **                      
-   **        1 2 3   4 5 6 
-   **        | | |   | | | 
+   **
+   **        1 2 3   4 5 6
+   **        | | |   | | |
    ** $--XTE,A,A,x.x,a,N*hh<CR><LF>
    **
    **  1) Status
@@ -94,12 +91,12 @@ bool XTE::Parse( const SENTENCE& sentence )
    */
 
    NMEA0183_BOOLEAN check = sentence.IsChecksumBad( 15 );
-   
+
    if ( check == NTrue )
    {
       SetErrorMessage( _T("Invalid Checksum") );
       return( FALSE );
-   } 
+   }
 
    /*
    ** Line has already been checked for checksum validity
@@ -121,7 +118,7 @@ bool XTE::Write( SENTENCE& sentence )
    /*
    ** Let the parent do its thing
    */
-   
+
    RESPONSE::Write( sentence );
 
    sentence += IsLoranBlinkOK;
@@ -132,7 +129,7 @@ bool XTE::Write( SENTENCE& sentence )
        sentence += _T("L");
    else
        sentence += _T("R");
-   
+
    sentence += CrossTrackUnits;
 
    sentence.Finish();

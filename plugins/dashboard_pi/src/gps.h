@@ -1,12 +1,6 @@
-/******************************************************************************
- * $Id: gps.h, v1.0 2010/08/26 SethDart Exp $
- *
- * Project:  OpenCPN
- * Purpose:  Dashboard Plugin
- * Author:   Jean-Eudes Onfray
- *
- ***************************************************************************
- *   Copyright (C) 2010 by David S. Register   *
+/**************************************************************************
+ *   Copyright (C) 2010 by Jean-Eudes Onfray                               *
+ *   Copyright (C) 2010 by David S. Register                               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,62 +13,60 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.             *
- ***************************************************************************
+ *   along with this program; if not, see <https://www.gnu.org/licenses/>. *
+ **************************************************************************/
+
+/**
+ * \file
+ *
+ * Dashboard GPS instrument
  */
 
-#ifndef __GPS_H__
-#define __GPS_H__
+#ifndef GpS_H_
+#define GpS_H_
 
 // For compilers that support precompilation, includes "wx/wx.h".
 #include <wx/wxprec.h>
 
-#ifdef __BORLANDC__
-    #pragma hdrstop
-#endif
-
 // for all others, include the necessary headers (this file is usually all you
 // need because it includes almost all "standard" wxWidgets headers)
 #ifndef WX_PRECOMP
-    #include <wx/wx.h>
+#include <wx/wx.h>
 #endif
 
 #include "instrument.h"
 
 // Required for struct SAT_INFO
-#include "nmea0183/SatInfo.h"
+#include "SatInfo.h"
 
-class DashboardInstrument_GPS: public DashboardInstrument
-{
-      public:
-            DashboardInstrument_GPS( wxWindow *parent, wxWindowID id, wxString title);
+class DashboardInstrument_GPS : public DashboardInstrument {
+public:
+  DashboardInstrument_GPS(wxWindow* parent, wxWindowID id, wxString title,
+                          InstrumentProperties* Properties);
 
-            ~DashboardInstrument_GPS(void){}
+  ~DashboardInstrument_GPS() override = default;
 
-            wxSize GetSize( int orient, wxSize hint );
-            void SetData(DASH_CAP, double, wxString) {};
-            void SetSatInfo(int cnt, int seq, wxString talk, SAT_INFO sats[4]);
+  wxSize GetSize(int orient, wxSize hint) override;
+  void SetData(DASH_CAP, double, wxString) override {};
+  void SetSatInfo(int cnt, int seq, wxString talk, SAT_INFO sats[4]);
 
-      private:
-
-      protected:
+private:
+protected:
 #define GNSS_SYSTEM 6
-            int m_cx, m_cy, m_radius;
-            int m_SatCount;
-            wxString talkerID;
-            SAT_INFO m_SatInfo[12];
-            bool b_shift;
-            wxDateTime m_lastShift;
-            wxDateTime m_Gtime[GNSS_SYSTEM];
-            int m_iMaster;
-            wxString s_gTalker;
-            void Draw(wxGCDC* dc);
-            void DrawFrame(wxGCDC* dc);
-            void DrawBackground(wxGCDC* dc);
-            void DrawForeground(wxGCDC* dc);
+  int m_cx, m_cy, m_radius, m_ref_dim, m_scale_delta, m_scale_base;
+  int m_sat_count;
+  int m_max_sat_count;
+  wxString talker_id;
+  SAT_INFO m_sat_info[12];
+  bool b_shift;
+  wxDateTime m_last_shift;
+  wxDateTime m_gtime[GNSS_SYSTEM];
+  int m_master;
+  wxString m_talker;
+  void Draw(wxGCDC* dc) override;
+  void DrawFrame(wxGCDC* dc);
+  void DrawBackground(wxGCDC* dc);
+  void DrawForeground(wxGCDC* dc);
 };
 
-#endif // __GPS_H__
-
+#endif  // GpS_H_

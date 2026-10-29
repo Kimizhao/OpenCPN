@@ -44,7 +44,8 @@
 WX_DEFINE_LIST(MRL);
 
 
-NMEA0183::NMEA0183()
+NMEA0183::NMEA0183() : NMEA0183(NmeaContext()) {}
+NMEA0183::NMEA0183(const NmeaContext& ctx) : caller_ctx(ctx)
 {
    initialize();
 
@@ -77,6 +78,8 @@ NMEA0183::NMEA0183()
    response_table.Append( (RESPONSE *) &Hdm );
    response_table.Append( (RESPONSE *) &Hdg );
    response_table.Append( (RESPONSE *) &Hdt );
+   response_table.Append( (RESPONSE *) &Hvd );
+   response_table.Append( (RESPONSE *) &Ths );
    response_table.Append( (RESPONSE *) &Rmb );
    response_table.Append( (RESPONSE *) &Rmc );
    response_table.Append( (RESPONSE *) &Wpl );
@@ -90,7 +93,7 @@ NMEA0183::NMEA0183()
    response_table.Append( (RESPONSE *) &Xte );
    response_table.Append( (RESPONSE *) &Mwd );
    response_table.Append( (RESPONSE *) &Mwv );
-   
+
 
 /*
    response_table.Add( (RESPONSE *) &Rot );
@@ -239,7 +242,7 @@ bool NMEA0183::PreParse( void )
       wxCharBuffer buf = sentence.Sentence.ToUTF8();
       if( !buf.data() )                            // badly formed sentence?
         return false;
-    
+
       if ( IsGood() )
       {
             wxString mnemonic = sentence.Field( 0 );
@@ -300,7 +303,7 @@ bool NMEA0183::Parse( void )
 
 //          Traverse the response list to find a mnemonic match
 
-       wxMRLNode *node = response_table.GetFirst();
+       MRL::compatibility_iterator node = response_table.GetFirst();
 
        int comparison  = 0;
 
@@ -349,23 +352,22 @@ bool NMEA0183::Parse( void )
 wxArrayString NMEA0183::GetRecognizedArray(void)
 {
     wxArrayString ret;
-    
-    wxMRLNode *node = response_table.GetFirst();
-    
-    while(node)
-    {
+
+
+    for (MRL::compatibility_iterator node = response_table.GetFirst();
+         node;
+         node = node->GetNext()) {
         RESPONSE *resp = node->GetData();
         ret.Add( resp->Mnemonic );
-        node = node->GetNext();
     }
 
     return ret;
 }
 
-    
-    
-    
-NMEA0183& NMEA0183::operator << ( wxString & source )
+
+
+
+NMEA0183& NMEA0183::operator << ( const wxString & source )
 {
 //   ASSERT_VALID( this );
 

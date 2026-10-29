@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1.0)
+cmake_minimum_required(VERSION 3.10.0)
 
 if (TARGET ocpn::serial)
     return ()
@@ -76,12 +76,13 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     VERSION ${PACKAGE_VERSION}
     PUBLIC_HEADER "${serial_HEADERS}"
 )
-if (OBJ_VISIBILITY)
-    set_target_properties(${PROJECT_NAME} PROPERTIES 
-        COMPILE_FLAGS "${OBJ_VISIBILITY}"
-    )
+
+if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang|GNU")  # Apple is AppleClang
+  target_compile_options(${PROJECT_NAME}  PRIVATE -fvisibility=default -fPIC)
 endif ()
-target_include_directories(${PROJECT_NAME} PUBLIC include)
+
+target_include_directories(
+  ${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
 if(APPLE)
     find_library(IOKIT_LIB IOKit)
     find_library(FOUNDATION_LIB Foundation)

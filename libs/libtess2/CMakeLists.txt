@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.6)
+cmake_minimum_required(VERSION 3.10)
 
 if (TARGET ocpn::tess2)
     return ()
@@ -20,9 +20,6 @@ if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang|AppleClang")
     add_compile_options("-Wno-format" "-Wno-unknown-pragmas")
 endif ()
 
-INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include)
-INCLUDE_DIRECTORIES(Include)
-
 IF(WIN32)
     IF(MSVC)
         SET(CMAKE_C_FLAGS_DEBUG               "/MDd /Ob0 /Od  /D_DEBUG  /Zi /RTC1" )
@@ -42,15 +39,15 @@ SET(SRC
     Source/bucketalloc.h
     Source/dict.c
     Source/dict.h
-    Source/geom.c  
-    Source/geom.h  
-    Source/mesh.c  
-    Source/mesh.h  
-    Source/priorityq.c  
-    Source/priorityq.h  
-    Source/sweep.c  
-    Source/sweep.h  
-    Source/tess.c  
+    Source/geom.c
+    Source/geom.h
+    Source/mesh.c
+    Source/mesh.h
+    Source/priorityq.c
+    Source/priorityq.h
+    Source/sweep.c
+    Source/sweep.h
+    Source/tess.c
     Source/tess.h
     Source/Striper.cpp
     Source/CustomArray.cpp
@@ -60,5 +57,8 @@ SET(SRC
 add_library(TESS2 STATIC ${SRC})
 add_library(ocpn::tess2 ALIAS TESS2)
 
-set_target_properties(TESS2 PROPERTIES COMPILE_FLAGS "${OBJ_VISIBILITY}")
+if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang|GNU")  # Apple is AppleClang
+  target_compile_options(TESS2 PRIVATE -fvisibility=default -fPIC)
+endif ()
+
 target_include_directories(TESS2 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Include)

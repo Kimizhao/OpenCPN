@@ -1,88 +1,85 @@
 #!/usr/bin/env bash
 
-#
-# Build the OSX artifacts 
-#
-set -xe
+set -e
 
-export MACOSX_DEPLOYMENT_TARGET=10.9
+#
+# Build the OSX artifacts using dependencies from Homebrew and the OS to minimize impact on the environment
+# The resulting build product is NOT ABI compatible with the upstream packages and plugins and should NEVER be distributed
+# If you want to produce the upstream compatible build, refer to the universal-build-macos.sh script which pulls in the prebuilt dependencies required for universal binary build and compatible with older macOS releases
+# The only prerequisites of the script are Homebrew and Xcode installed and working
+#
+
 
 # Return latest installed brew version of given package
 pkg_version() { brew list --versions $2 $1 | tail -1 | awk '{print $2}'; }
 
-#
-# Check if the cache is with us. If not, re-install brew.
-brew list --versions libexif || {
+
+# Check if the cache is with us. If not, re-install brew. This is needed in the CircleCI environment.
+brew list --versions python3 || {
     brew update-reset
-    # As indicated by warning message in CircleCI build log:
-    git -C "/usr/local/Homebrew/Library/Taps/homebrew/homebrew-core" \
-        fetch --unshallow
-    git -C "/usr/local/Homebrew/Library/Taps/homebrew/homebrew-cask" \
-        fetch --unshallow
 }
 
-for pkg in cairo cmake libarchive libexif pixman python3 wget xz; do
+# install cmake if not available
+cmake --version 2> /dev/null || brew install cmake
+
+# Install the build dependencies for OpenCPN
+brew install gettext
+brew install lame
+brew install lz4
+brew install mpg123
+brew install xz
+brew install zstd
+brew install wxwidgets@3.2
+brew install libarchive
+brew install create-dmg
+brew install gpatch
+
+if [ -d /usr/local/include ]; then
+  ln -sf /usr/local/opt/libarchive/include/archive.h /usr/local/include/archive.h
+  ln -sf /usr/local/opt/libarchive/include/archive_entry.h /usr/local/include/archive_entry.h
+  ln -sf /usr/local/opt/libarchive/lib/libarchive.13.dylib /usr/local/lib/libarchive.13.dylib
+fi
+
+for pkg in openssl cmake ; do
     brew list --versions $pkg || brew install $pkg || brew install $pkg || :
     brew link --overwrite $pkg || :
 done
 
-# Make sure cmake finds libarchive
-version=$(pkg_version libarchive)
-pushd /usr/local/include
-    ln -sf /usr/local/Cellar/libarchive/$version/include/archive.h .
-    ln -sf /usr/local/Cellar/libarchive/$version/include/archive_entry.h .
-    cd ../lib
-    ln -sf  /usr/local/Cellar/libarchive/$version/lib/libarchive.13.dylib .
-    ln -sf  /usr/local/Cellar/libarchive/$version/lib/libarchive.dylib .
-popd
-
-if brew list --cask --versions packages; then
-    version=$(pkg_version packages '--cask')
-    sudo installer \
-        -pkg /usr/local/Caskroom/packages/$version/packages/Packages.pkg \
-        -target /
-else
-    brew install --cask packages
-fi
-
-
-wget -q https://download.opencpn.org/s/rwoCNGzx6G34tbC/download \
-    -O /tmp/wx312B_opencpn50_macos109.tar.xz
-tar -C /tmp -xJf /tmp/wx312B_opencpn50_macos109.tar.xz 
-export PATH="/usr/local/opt/gettext/bin:$PATH"
-echo 'export PATH="/usr/local/opt/gettext/bin:$PATH"' >> ~/.bash_profile
+# Download and unzip documentation files
+wget -nv -O QuickStartGuide.zip \
+  "https://dl.cloudsmith.io/public/david-register/opencpn-docs/raw/files/QuickStartGuide-v0.4.zip"
+mkdir -p data/doc/local
+unzip QuickStartGuide.zip -d data/doc/local
+sudo chmod -R +r data/doc/local
 
 # Build, install and make package
-mkdir build
+mkdir -p build
 cd build
 test -n "$TRAVIS_TAG" && CI_BUILD=OFF || CI_BUILD=ON
+# Configure the build
 cmake -DOCPN_CI_BUILD=$CI_BUILD \
-  -DOCPN_USE_LIBCPP=ON \
+  -DOCPN_VERBOSE=ON \
   -DOCPN_USE_SYSTEM_LIBARCHIVE=OFF \
-  -DwxWidgets_CONFIG_EXECUTABLE=/tmp/wx312B_opencpn50_macos109/bin/wx-config \
-  -DwxWidgets_CONFIG_OPTIONS="--prefix=/tmp/wx312B_opencpn50_macos109" \
-  -DCMAKE_INSTALL_PREFIX=/tmp/opencpn -DCMAKE_OSX_DEPLOYMENT_TARGET=10.9 \
+  -DCMAKE_INSTALL_PREFIX=/tmp/opencpn \
+  -DOCPN_RELEASE=0 \
+  -DOCPN_BUILD_TEST=ON \
+  -DOCPN_BUILD_SAMPLE=ON \
   ..
+
+# Compile OpenCPN
 make -sj$(sysctl -n hw.physicalcpu)
+
+# Create the package artifacts
 mkdir -p /tmp/opencpn/bin/OpenCPN.app/Contents/MacOS
 mkdir -p /tmp/opencpn/bin/OpenCPN.app/Contents/SharedSupport/plugins
 make install
 make install # Dunno why the second is needed but it is, otherwise
              # plugin data is not included in the bundle
 
-#  A truly awful hack...
-#  fixup_bundle (part of MacOS install step) seems to somehow miss the required copy of libpixman
-#  Or the second install kills it...
-#  So we do it explicitely.
-rm /tmp/opencpn/bin/OpenCPN.app/Contents/Frameworks/libpixman-1.0.dylib
-cp /usr/local/Cellar/pixman/0.40.0/lib/libpixman-1.0.40.0.dylib /tmp/opencpn/bin/OpenCPN.app/Contents/Frameworks/libpixman-1.0.dylib
-# and some dependencies which failed to get softlinks
-cp /usr/local/Cellar/zstd/1.4.9_1/lib/libzstd.1.4.9.dylib /tmp/opencpn/bin/OpenCPN.app/Contents/Frameworks/libzstd.1.dylib
-
-sudo ls -l /tmp/opencpn/bin/OpenCPN.app/Contents/Frameworks
+# Make sure the code signatures are correct
+codesign --force --deep --sign - /tmp/opencpn/bin/OpenCPN.app
 
 make create-pkg
-make create-dmg
-
-# Install the stuff needed by upload.
-pip3 install -q cloudsmith-cli
+if [[ ! -z "${CREATE_DMG+x}" ]]; then
+  make create-dmg
+fi

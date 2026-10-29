@@ -1,12 +1,6 @@
-/******************************************************************************
- * $Id: wind.h, v1.0 2010/08/05 SethDart Exp $
- *
- * Project:  OpenCPN
- * Purpose:  Dashboard Plugin
- * Author:   Jean-Eudes Onfray
- *
- ***************************************************************************
- *   Copyright (C) 2010 by David S. Register   *
+/**************************************************************************
+ *   Copyright (C) 2010 by Jean-Eudes Onfray                               *
+ *   Copyright (C) 2010 by David S. Register                               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,106 +13,92 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.             *
- ***************************************************************************
+ *   along with this program; if not, see <https://www.gnu.org/licenses/>. *
+ **************************************************************************/
+
+/**
+ * \file
+ *
+ * Dashboard wind instrument implementation.
  */
 
-#ifndef __Wind_H__
-#define __Wind_H__
+#ifndef Wind_H_
+#define Wind_H_
 
-// For compilers that support precompilation, includes "wx/wx.h".
 #include <wx/wxprec.h>
 
-#ifdef __BORLANDC__
-    #pragma hdrstop
-#endif
-
-// for all others, include the necessary headers (this file is usually all you
-// need because it includes almost all "standard" wxWidgets headers)
 #ifndef WX_PRECOMP
-    #include <wx/wx.h>
+#include <wx/wx.h>
 #endif
 
 #include "dial.h"
 
-//+------------------------------------------------------------------------------
-//|
-//| CLASS:
-//|    DashboardInstrument_Wind
-//|
-//| DESCRIPTION:
-//|    This class creates a wind style control
-//|
-//+------------------------------------------------------------------------------
-class DashboardInstrument_Wind: public DashboardInstrument_Dial
-{
-      public:
-            DashboardInstrument_Wind( wxWindow *parent, wxWindowID id, wxString title, DASH_CAP cap_flag);
+/** A wind style control. */
+class DashboardInstrument_Wind : public DashboardInstrument_Dial {
+public:
+  DashboardInstrument_Wind(wxWindow* parent, wxWindowID id, wxString title,
+                           InstrumentProperties* Properties, DASH_CAP cap_flag);
 
-            ~DashboardInstrument_Wind(void){}
+  ~DashboardInstrument_Wind() override = default;
 
-      private:
-
-      protected:
-            void DrawBackground(wxGCDC* dc);
+private:
+protected:
+  void DrawBackground(wxGCDC* dc) override;
 };
 
-class DashboardInstrument_WindCompass: public DashboardInstrument_Dial
-{
-      public:
-            DashboardInstrument_WindCompass( wxWindow *parent, wxWindowID id, wxString title, DASH_CAP cap_flag);
+class DashboardInstrument_WindCompass : public DashboardInstrument_Dial {
+public:
+  DashboardInstrument_WindCompass(wxWindow* parent, wxWindowID id,
+                                  wxString title,
+                                  InstrumentProperties* Properties,
+                                  DASH_CAP cap_flag);
 
-            ~DashboardInstrument_WindCompass(void){}
+  ~DashboardInstrument_WindCompass() override = default;
 
-      private:
-
-      protected:
-            void DrawBackground(wxGCDC* dc);
+protected:
+  void DrawBackground(wxGCDC* dc) override;
 };
 
-class DashboardInstrument_TrueWindAngle: public DashboardInstrument_Dial
-{
-      public:
-            DashboardInstrument_TrueWindAngle( wxWindow *parent, wxWindowID id, wxString title, DASH_CAP cap_flag);
+class DashboardInstrument_TrueWindAngle : public DashboardInstrument_Dial {
+public:
+  DashboardInstrument_TrueWindAngle(wxWindow* parent, wxWindowID id,
+                                    wxString title,
+                                    InstrumentProperties* Properties,
+                                    DASH_CAP cap_flag);
 
-            ~DashboardInstrument_TrueWindAngle(void){}
+  ~DashboardInstrument_TrueWindAngle() override = default;
 
-      private:
-
-      protected:
-
-            void DrawBackground(wxGCDC* dc);
+protected:
+  void DrawBackground(wxGCDC* dc) override;
 };
 /*****************************************************************************
 Apparent & True wind angle combined in one dial instrument
 Author: Thomas Rauch
 ******************************************************************************/
-class DashboardInstrument_AppTrueWindAngle : public DashboardInstrument_Dial
-{
+class DashboardInstrument_AppTrueWindAngle : public DashboardInstrument_Dial {
 public:
-	DashboardInstrument_AppTrueWindAngle(wxWindow *parent, wxWindowID id, wxString title, DASH_CAP cap_flag);
+  DashboardInstrument_AppTrueWindAngle(wxWindow* parent, wxWindowID id,
+                                       wxString title,
+                                       InstrumentProperties* Properties,
+                                       DASH_CAP cap_flag);
 
-	~DashboardInstrument_AppTrueWindAngle(void){}
-	void SetData(DASH_CAP, double, wxString);
-
+  ~DashboardInstrument_AppTrueWindAngle() override = default;
+  void SetData(DASH_CAP, double, wxString) override;
 
 private:
-
 protected:
-	double m_MainValueApp, m_MainValueTrue;
-	double m_ExtraValueApp, m_ExtraValueTrue;
+  double m_MainValueApp, m_MainValueTrue;
+  double m_ExtraValueApp, m_ExtraValueTrue;
 
-	wxString m_ExtraValueAppUnit, m_ExtraValueTrueUnit, m_MainValueAppUnit, m_MainValueTrueUnit;
-	DialPositionOption m_MainValueOption1, m_MainValueOption2, m_ExtraValueOption1, m_ExtraValueOption2;
-	void DrawBackground(wxGCDC* dc);
-	virtual void Draw(wxGCDC* dc);
-	virtual void DrawForeground(wxGCDC* dc);
-	virtual void DrawData(wxGCDC* dc, double value, wxString unit, wxString format, DialPositionOption position);
-
-
+  wxString m_ExtraValueAppUnit, m_ExtraValueTrueUnit, m_MainValueAppUnit,
+      m_MainValueTrueUnit;
+  DialPositionOption m_MainValueOption1, m_MainValueOption2,
+      m_ExtraValueOption1, m_ExtraValueOption2;
+  void DrawBackground(wxGCDC* dc) override;
+  void Draw(wxGCDC* dc) override;
+  void DrawForeground(wxGCDC* dc) override;
+  void DrawData(wxGCDC* dc, double value, wxString unit, wxString format,
+                DialPositionOption position) override;
 };
 
-#endif // __Wind_H__
-
+#endif  // Wind_H_

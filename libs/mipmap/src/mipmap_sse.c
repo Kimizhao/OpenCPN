@@ -27,7 +27,7 @@
 #include <string.h>
 #include "mipmap.h"
 
-#if defined(__SSE__) || (defined(__MSVC__) &&  (_MSC_VER >= 1700))
+#if defined(__SSE__)
 #include <xmmintrin.h>
 
 // typically 4 times faster than generic
@@ -41,7 +41,7 @@ void MipMap_32_sse( int width, int height, unsigned char *source, unsigned char 
     int newwidth = width / 2;
     int newheight = height / 2;
     int stride = width * 4;
-    
+
     unsigned char *s = target;
     unsigned char *t = source;
     unsigned char *u = t+stride;

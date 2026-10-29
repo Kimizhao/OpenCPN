@@ -1,0 +1,6 @@
+#!/bin/sh
+if [ -d "$DSTROOT" ]; then
+  rm -f ${DSTROOT}/Contents/Frameworks/*.dylib
+  rm -f ${DSTROOT}/Contents/MacOS/*.dylib
+fi
+exit 0

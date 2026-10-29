@@ -1,0 +1,10 @@
+{
+   "filter" : {
+      "name" : "all-nmea",
+      "buses" : [
+         "nmea0183",
+         "nmea2000"
+      ],
+      "description" : "All NMEA data"
+   }
+}

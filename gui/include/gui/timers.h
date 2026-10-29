@@ -1,0 +1,47 @@
+/**************************************************************************
+ *   Copyright (C) 2013 by David S. Register                               *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, see <https://www.gnu.org/licenses/>. *
+ **************************************************************************/
+
+/**
+ * \file
+ *
+ * Timer identification constants
+ */
+
+#ifndef TIMERS_H_
+#define TIMERS_H_
+
+#define RESCALE_TIMER 1  // Not used
+#define PAN_TIMER 2
+#define CURTRACK_TIMER 3
+#define ROT_TIMER 4
+#define ROPOPUP_TIMER 5
+#define TCWININF_TIMER 6
+#define ROLLOVER_TIMER 7
+#define MOVEMENT_TIMER 8
+#define MOVEMENT_STOP_TIMER 9
+#define DBLCLICK_TIMER 10
+#define POPUP_TIMER 11
+#define MOUSEWHEEL_TIMER 12
+#define DEFERRED_FOCUS_TIMER 13
+#define ROUTEFINISH_TIMER 14
+#define MOVEMENT_VP_TIMER 15
+#define DRAG_INERTIA_TIMER 16
+#define JUMP_EASE_TIMER 17
+#define TCWIN_TIME_INDICATOR_TIMER 18
+#define MENU_TIMER 19
+#define TAP_TIMER 20
+#endif

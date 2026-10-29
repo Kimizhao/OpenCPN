@@ -13,7 +13,7 @@ CMake variables
 	CPACK_PACKAGE_VERSION_PATCH ${VERSION_PATCH}
 	CPACK_PACKAGE_VERSION ${PACKAGE_VERSION}
 	CPACK_NSIS_INSTALLED_ICON_NAME "opencpn.exe"
-	CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/src/bitmaps\\\\opencpn.ico"
+	CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/resources/bitmaps\\\\opencpn.ico"
 	CPACK_NSIS_EXTRA_INSTALL_COMMANDS ${CPACK_NSIS_EXTRA_INSTALL_COMMANDS}
 	CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/data/license.txt"
 	CPACK_BUILDWIN_DIR "${CMAKE_SOURCE_DIR}/buildwin"
@@ -33,7 +33,7 @@ CMake variables
 ----------------------------------------------------------------------------------------------------------*/
 ; Enabled on MINGW builds:
 ;!define NSIS_PACKEDVERSION true
- 
+
 ;# Set compression
 	SetCompressor /FINAL lzma
 !ifdef NSIS_PACKEDVERSION
@@ -48,7 +48,7 @@ CMake variables
 	!define CPACK_NSIS_INSTALLED_ICON_NAME "opencpn.exe"
 	!define CPACK_NSIS_PACKAGE_NAME_LC "opencpn"
 	!define CPACK_NSIS_DISPLAY_NAME "${CPACK_PACKAGE_NAME} ${PACKAGE_VERSION}"
-	!define CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/src/bitmaps/opencpn.ico"
+	!define CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/resources/bitmaps/opencpn.ico"
 	!define CPACK_BUILDWIN_DIR "${CMAKE_SOURCE_DIR}/buildwin"
 	!define CPACK_NSIS_DIR "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode"
 	*/
@@ -87,6 +87,7 @@ CMake variables
 	Var VERSION_OLDER
 	Var CANCEL_INSTALLER
 	Var VERSION_DATE
+	Var LAST_VERSION_DATE
 	Var LANG_NAME
 	Var Status_SecGrpSetConfig
 	Var MAJOR_D
@@ -191,8 +192,7 @@ CMake variables
   OutFile "@CPACK_TOPLEVEL_DIRECTORY@/${OUTPUT_FILE_NAME}"
 
   ;# Default installation folder
-  InstallDir "$PROGRAMFILES\OpenCPN"
-
+  InstallDir "@NSIS_INSTALL_PROGRAMFILES@\OpenCPN"
   BrandingText /TRIMLEFT "OpenCPN $(Installer) v${OCPN_INSTALLER_VERSION}"
 ;--------------------------------
 ;# Interface Settings
@@ -794,7 +794,7 @@ SectionGroup /e "!Shortcuts Section Group" SecGrpShortcuts
 			;# Create shortcuts
 			CreateDirectory "$SMPROGRAMS\$STARTMENU_FOLDER"
 			CreateShortCut "$SMPROGRAMS\$STARTMENU_FOLDER\OpenCPN @CPACK_PACKAGE_VERSION@.lnk" "$INSTDIR\opencpn.exe"
-			CreateShortCut "$SMPROGRAMS\$STARTMENU_FOLDER\OpenCPN @CPACK_PACKAGE_VERSION@ - No OpenGL.lnk" "$INSTDIR\opencpn.exe" "/no_opengl"
+			CreateShortCut "$SMPROGRAMS\$STARTMENU_FOLDER\OpenCPN @CPACK_PACKAGE_VERSION@ - No OpenGL.lnk" "$INSTDIR\opencpn.exe" "--no_opengl"
 			CreateDirectory "$SMPROGRAMS\$STARTMENU_FOLDER\$(Uninstall_Folder_Name)"
 			CreateShortCut "$SMPROGRAMS\$STARTMENU_FOLDER\$(Uninstall_Folder_Name)\$(Uninstall_Link).lnk" "$INSTDIR\Uninstall @CPACK_PACKAGE_VERSION@.exe"
 		!insertmacro MUI_STARTMENU_WRITE_END
@@ -822,6 +822,8 @@ SectionEnd
 
 ;# Install Section /hidden
 Section "-Install Section" SecInstall
+		;#File "@CPACK_BINDIR@\_CPack_Packages\win32\NSIS\opencpn_@CPACK_PACKAGE_VERSION@_setup\bin\opencpn-cmd.exe"
+		;#File "@CPACK_BINDIR@\_CPack_Packages\win32\NSIS\opencpn_@CPACK_PACKAGE_VERSION@_setup\bin\opencpn-glutil.exe"
 	@CPACK_NSIS_FULL_INSTALL@
 
 	@CPACK_NSIS_EXTRA_INSTALL_COMMANDS@
@@ -835,10 +837,11 @@ Section "-Install Section" SecInstall
 	WriteRegStr SHCTX "${REG_KEY_UN}" "DisplayName" "@CPACK_PACKAGE_NAME@ @CPACK_PACKAGE_VERSION@"
 	WriteRegStr SHCTX "${REG_KEY_UN}" "DisplayVersion" "@CPACK_PACKAGE_VERSION@"
 	WriteRegStr SHCTX "${REG_KEY_UN}" "CompareVersion" "$VERSION_DATE"
+	WriteRegStr SHCTX "${REG_KEY_UN}" "LastCompareVersion" "$LAST_VERSION_DATE"
 	WriteRegStr SHCTX "${REG_KEY_UN}" "StartMenuPath" "$SMPROGRAMS\$STARTMENU_FOLDER"
 	WriteRegStr SHCTX "${REG_KEY_UN}" "InstallLocation" "$INSTDIR"
 	WriteRegStr SHCTX "${REG_KEY_UN}" "UninstallString" "$\"$INSTDIR\Uninstall @CPACK_PACKAGE_VERSION@.exe$\""
-	WriteRegStr SHCTX "${REG_KEY_UN}" "QuietUninstallString" "$\"$INSTDIR\Uninstall @CPACK_PACKAGE_VERSION@.exe /S$\""
+	WriteRegStr SHCTX "${REG_KEY_UN}" "QuietUninstallString" "$\"$INSTDIR\Uninstall @CPACK_PACKAGE_VERSION@.exe$\" /S"
 	WriteRegStr SHCTX "${REG_KEY_UN}" "ConfigLocation" "$APPDATA\@CPACK_NSIS_PACKAGE_NAME_LC@"
 	WriteRegStr SHCTX "${REG_KEY_UN}" "DisplayIcon" "$INSTDIR\@CPACK_NSIS_INSTALLED_ICON_NAME@"
 	WriteRegStr SHCTX "${REG_KEY_UN}" "Publisher" "@CPACK_PACKAGE_VENDOR@"
@@ -925,6 +928,8 @@ Section "-un.Uninstall" UnSecUninstall
 		ReadRegStr $0 HKLM "${REG_KEY_UN}" "UninstallString"
 		${StrFilter} "$0" "" "" "$\"" $0
 		Delete $0
+		;#Delete $INSTDIR\opencpn-cmd.exe
+		;#Delete $INSTDIR\opencpn-glutil.exe
 		;# Remove the installation log file
 		Delete "$INSTDIR\install.log"
 		@CPACK_NSIS_DELETE_FILES@
@@ -950,16 +955,10 @@ SectionEnd
 ;##################################################################################################
 ;#  .onInit Function
 Function .onInit
-	;# Check if Windows version is at least XP (not Win 98, Win 2000 or older)
-	${IfNot} ${AtLeastWinXP}
+	;# Require Windows 8 or later (block Windows 7 and older)
+	${IfNot} ${AtLeastWin8}
 		MessageBox MB_OK|MB_ICONEXCLAMATION "$(Installer_Unsupported_Windows_Version)"
 		Abort
-	${Else}
-		${If} ${IsWinXP}
-		${AndIf} ${AtMostServicePack} 2
-		MessageBox MB_OK|MB_ICONEXCLAMATION "$(Installer_Unsupported_XP_SP_Version)"
-		Abort
-		${EndIf}
 	${EndIf}
 
 	;Prevent multiple instances of the installer
@@ -2018,7 +2017,7 @@ FunctionEnd
 
 			StrCpy $GroupBox_Size 1
 		;Case 2: one older previous installation => Option 1: Upgrade Option 2: Parallel Installation
-		${ElseIf} $MULTIPLE_INSTALLS == 1
+		${ElseIf} $MULTIPLE_INSTALLS > 0
 		${AndIf} $VERSION_NEWER == 1
 			${NSD_CreateLabel} 0 0 100% 32u "$(Label_TypeInst_Upgrade_Text)"
 			Pop $Label_TypeInst_Upgrade
@@ -2041,7 +2040,7 @@ FunctionEnd
 
 			StrCpy $GroupBox_Size 2
 		;Case 3: one newer previous installation => Option 1: Downgrade Option 2: Parallel Installation
-		${ElseIf} $MULTIPLE_INSTALLS == 1
+		${ElseIf} $MULTIPLE_INSTALLS > 0
 		${AndIf} $VERSION_OLDER == 1
 			${NSD_CreateLabel} 0 0 100% 32u "$(Label_TypeInst_Downgrade_Text)"
 			Pop $Label_TypeInst_Downgrade
@@ -2064,6 +2063,7 @@ FunctionEnd
 
 			StrCpy $GroupBox_Size 2
 		;Case 4: more than one previous installation => Option 1: Parallel Installation
+		;August, 2024, dsr.  This case is never activated
 		${ElseIf} $MULTIPLE_INSTALLS > 1
 			${NSD_CreateLabel} 0 0 100% 32u "$(Label_TypeInst_Parallel_Text)"
 			Pop $Label_TypeInst_Parallel
@@ -2321,7 +2321,8 @@ FunctionEnd
 		StrCmp $CONFIG_SET_LANG 1 0 +2
 		${NSD_SetState} $CheckBox_Language_SetConfig ${BST_CHECKED}
 
-		cont:
+		#Omit chart installer function. Now performed by the First time user Wizard
+		/*cont:
 		${NSD_CreateGroupBox} 0 55u 100% 85u "$(GB_ChartDir_SetConfig_Text)"
 		Pop $GroupBox_ChartDir_SetConfig
 
@@ -2381,9 +2382,10 @@ FunctionEnd
 					SendMessage $ListBox_SetConfig ${LB_ADDSTRING} 0 "STR:$2"
 				${Next}
 			${EndIf}
-		${EndIf}
+		${EndIf}*/
 
-		cont2:
+		#cont2:
+		cont:
 			Call ListBox_SetConfig_Change
 			nsDialogs::Show
 	FunctionEnd
@@ -3692,6 +3694,7 @@ FunctionEnd
 				${If} $R3 == "OpenCPN"
 				${AndIf} $R2 > 7
 					ReadRegStr $R4 SHCTX "${REG_ROOT_KEY_UN}\$R1" "CompareVersion"
+					StrCpy $LAST_VERSION_DATE $R4
 					ReadRegStr $R6 SHCTX "${REG_ROOT_KEY_UN}\$R1" "InstallLocation"
 					${If} $R4 != ""
 						${VersionCompare} $VERSION_DATE $R4 $Compare_Version_Result
@@ -4323,7 +4326,7 @@ Var explArrCount
 	LangString Uninstaller ${LANG_ENGLISH} "uninstaller"
 
   ;Installer running on unsupported version of Windows
-	LangString Installer_Unsupported_Windows_Version ${LANG_ENGLISH} "Your Windows version is not supported (it's too old)!$\r$\nYou need at least Windows XP SP3."
+	LangString Installer_Unsupported_Windows_Version ${LANG_ENGLISH} "Your Windows version is not supported (it's too old)!$\r$\nYou need at least Windows 7."
 
   ;Installer running on Windows XP without SP3
 	LangString Installer_Unsupported_XP_SP_Version ${LANG_ENGLISH} "Your Windows XP Service Pack version is not supported (it's too old)!$\r$\nYou need at least Windows XP SP3."

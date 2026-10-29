@@ -18,11 +18,13 @@
 
 // includes
 #ifndef WX_PRECOMP
-    #include <wx/log.h>
+    #include <wx/wx.h>
 #endif
 
+#include "wx/log.h"
+
 #ifdef __WXMSW__
-    #include <wx/msw/msvcrt.h>      // useful to catch memory leaks when compiling under MSVC 
+    #include <wx/msw/msvcrt.h>      // useful to catch memory leaks when compiling under MSVC
 #endif
 
 #include "wx/curl/utils.h"

@@ -20,7 +20,7 @@
 
 
 # define minimum cmake version
-CMAKE_MINIMUM_REQUIRED(VERSION 3.1.1)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 CMAKE_POLICY(SET CMP0043 NEW)
 
 PROJECT(dashboard_pi)
@@ -50,6 +50,7 @@ IF( APPLE )
     ADD_COMPILE_OPTIONS("-Wno-unused" "-Wno-overloaded-virtual")
    SET(CMAKE_SHARED_LINKER_FLAGS "-Wl -undefined dynamic_lookup")
 ENDIF( APPLE )
+
 
 # Add some definitions to satisfy MSVC
 IF(MSVC)
@@ -81,14 +82,16 @@ SET(SRC_DASHBOARD
     src/dashboard_pi.cpp
     src/instrument.cpp
     src/instrument.h
-    src/iirfilter.h
-    src/iirfilter.cpp
+    src/iir_filter.h
+    src/iir_filter.cpp
     src/compass.cpp
     src/compass.h
     src/dial.cpp
     src/dial.h
     src/gps.cpp
     src/gps.h
+    src/iir_filter.h
+    src/iir_filter.cpp
     src/rudder_angle.cpp
     src/rudder_angle.h
     src/speedometer.cpp
@@ -97,6 +100,8 @@ SET(SRC_DASHBOARD
     src/wind.h
     src/depth.cpp
     src/depth.h
+    src/altitude.cpp
+    src/altitude.h
     src/clock.cpp
     src/clock.h
     src/icons.cpp
@@ -183,19 +188,27 @@ SET(SRC_NMEA0183
     src/nmea0183/xdr.cpp
     src/nmea0183/xdr.hpp
 )
-##INCLUDE_DIRECTORIES(src/nmea0183)
 
 
 SET_PROPERTY(GLOBAL PROPERTY TARGET_SUPPORTS_SHARED_LIBS TRUE)
 SET(BUILD_SHARED_LIBS "ON")
-ADD_LIBRARY(${PACKAGE_NAME} SHARED ${SRC_DASHBOARD} ${SRC_NMEA0183} )
+ADD_LIBRARY(${PACKAGE_NAME} SHARED ${SRC_DASHBOARD} ${SRC_NMEA0183})
+
+if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang|GNU")  # Apple is AppleClang
+  target_compile_options(${PACKAGE_NAME} PRIVATE -fvisibility=hidden)
+endif ()
+
+# FIXME (leamas) Remove horrible hack MSVC vs others
+
 target_include_directories(${PACKAGE_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include/wx
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/nmea0183
 )
-target_link_libraries( ${PACKAGE_NAME} ocpn::opencpn )
+target_link_libraries(${PACKAGE_NAME} ocpn::opencpn )
+target_link_libraries(${PACKAGE_NAME} ocpn::N2KParser )
+target_link_libraries(${PACKAGE_NAME} ocpn::manual )
 
 IF (WIN32 AND NOT MSVC)
   SET( CMAKE_SHARED_LINKER_FLAGS "-L../../" )
@@ -223,7 +236,7 @@ endif()
 
 IF(APPLE)
     INSTALL(TARGETS ${PACKAGE_NAME} BUNDLE LIBRARY DESTINATION ${CMAKE_BINARY_DIR}/OpenCPN.app/Contents/PlugIns)
-   
+
    IF(EXISTS ${PROJECT_SOURCE_DIR}/data)
     INSTALL(DIRECTORY data DESTINATION ${CMAKE_BINARY_DIR}/OpenCPN.app/Contents/SharedSupport/plugins/${PACKAGE_NAME})
     ENDIF()
@@ -241,7 +254,10 @@ ENDIF(UNIX AND NOT APPLE)
 
 IF(WIN32)
     INSTALL(TARGETS ${PACKAGE_NAME} RUNTIME DESTINATION "plugins")
-  
+  if (NOT OCPN_CI_BUILD)
+    INSTALL(FILES $<TARGET_PDB_FILE:${PACKAGE_NAME}> DESTINATION "plugins")
+  endif (NOT OCPN_CI_BUILD)
+
     SET(INSTALL_DIRECTORY "plugins/${PACKAGE_NAME}")
 
     IF(EXISTS ${PROJECT_SOURCE_DIR}/data)
@@ -252,19 +268,26 @@ ENDIF(WIN32)
 # Copy shared library to execution folder for debugging if not CI build
 if (NOT OCPN_CI_BUILD)
   if (MSVC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zi")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /DEBUG /OPT:REF /OPT:ICF")
     add_custom_command(
-      TARGET ${PACKAGE_NAME} POST_BUILD
+      TARGET ${PACKAGE_NAME}
+      POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E echo "Copying dll file"
-      COMMAND ${CMAKE_COMMAND} -E echo "$(TargetPath)" "${CMAKE_BINARY_DIR}/$(configuration)/plugins"
-      COMMAND ${CMAKE_COMMAND} -E copy "$(TargetPath)" "${CMAKE_BINARY_DIR}/$(configuration)/plugins"
+      COMMAND ${CMAKE_COMMAND} -E echo "$<TARGET_FILE:${PACKAGE_NAME}>"
+                "${CMAKE_BINARY_DIR}/$<CONFIGURATION>/plugins/${PACKAGE_NAME}.dll"
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:${PACKAGE_NAME}>"
+                "${CMAKE_BINARY_DIR}/$<CONFIGURATION>/plugins/${PACKAGE_NAME}.dll"
     )
-      if (CMAKE_BUILD_TYPE MATCHES "Debug")
-        add_custom_command(
-          COMMAND ${CMAKE_COMMAND} -E echo "Copying pdb file"
-          COMMAND ${CMAKE_COMMAND} -E echo "$(OutputPath)/$(TargetName).pdb" "${CMAKE_BINARY_DIR}/$(configuration)/plugins"
-          COMMAND ${CMAKE_COMMAND} -E copy "$(OutputPath)/$(TargetName).pdb" "${CMAKE_BINARY_DIR}/$(configuration)/plugins"
-        )
-      endif (CMAKE_BUILD_TYPE)
+    add_custom_command(
+      TARGET ${PACKAGE_NAME}
+      POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E echo "Copying pdb file"
+      COMMAND ${CMAKE_COMMAND} -E echo "$<TARGET_PDB_FILE:${PACKAGE_NAME}>"
+                "${CMAKE_BINARY_DIR}/$<CONFIGURATION>/plugins/${PACKAGE_NAME}.pdb"
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_PDB_FILE:${PACKAGE_NAME}>"
+                "${CMAKE_BINARY_DIR}/$<CONFIGURATION>/plugins/${PACKAGE_NAME}.pdb"
+    )
   endif (MSVC)
 endif (NOT OCPN_CI_BUILD)
 

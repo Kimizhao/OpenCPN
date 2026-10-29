@@ -28,7 +28,6 @@
 #include "mipmap.h"
 
 #if defined(__SSSE3__) || (defined(__MSVC__) &&  (_MSC_VER >= 1700))
-
 #include <tmmintrin.h>
 
 // typically 5 times faster than generic
@@ -42,7 +41,7 @@ void MipMap_24_ssse3( int width, int height, unsigned char *source, unsigned cha
     int newwidth = width / 2;
     int newheight = height / 2;
     int stride = width * 3;
-    
+
     unsigned char *s = target;
     unsigned char *t = source;
     unsigned char *u = t+stride;

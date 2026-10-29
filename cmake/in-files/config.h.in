@@ -1,8 +1,10 @@
 #ifndef OCPN_CONFIG_H
 #define OCPN_CONFIG_H
 
+#define HAVE_OCPN_LOG     // file logger.h exists, ocpn log extensions
+
 #cmakedefine LINUX_CRASHRPT
-#cmakedefine OCPN_USE_CRASHRPT
+#cmakedefine OCPN_USE_CRASHREPORT
 #cmakedefine OCPN_HAVE_X11
 
 // Garmin Host Mode support
@@ -18,28 +20,26 @@
 
 #cmakedefine OCPN_USE_NEWSERIAL
 
+#cmakedefine ENABLE_VCAN_TESTS
+
+#cmakedefine OCPN_ENABLE_MDNS_DEBUG
+
 // Enable dark mode on modern MacOS.
 #cmakedefine OCPN_USE_DARKMODE
 
 #cmakedefine ocpnUSE_GLES
 
 
-#ifndef TIXML_USE_STL
-#cmakedefine TIXML_USE_STL
-#endif
-
-
 #cmakedefine OPENGL_FOUND
 #undef HAVE_UNISTD_H
 #cmakedefine OCPN_USE_UDEV_PORTS
 #cmakedefine OCPN_USE_SYSFS_PORTS
+#cmakedefine HAVE_SYSFS_PORTS
 #cmakedefine HAVE_DIRENT_H
 #cmakedefine HAVE_LIBGEN_H
 #cmakedefine HAVE_LIBUDEV
 #cmakedefine HAVE_PORTAUDIO
 #cmakedefine HAVE_READLINK
-#cmakedefine HAVE_SNDFILE
-#cmakedefine HAVE_SYSTEM_CMD_SOUND
 #cmakedefine HAVE_UNISTD_H
 #cmakedefine USE_SYSFS_PORTS
 #cmakedefine HAVE_LINUX_SERIAL_H
@@ -47,6 +47,7 @@
 #cmakedefine HAVE_SYS_TYPES_H
 #cmakedefine HAVE_SYS_FCNTL_H
 #cmakedefine HAVE_SYS_IOCTL_H
+#cmakedefine OCPN_DISTRO_BUILD
 
 // The os compatible plugins are are built for
 #define PKG_TARGET "${PKG_TARGET}"
@@ -54,25 +55,21 @@
 // The os version compatible plugins are are built for
 #define PKG_TARGET_VERSION "${PKG_TARGET_VERSION}"
 
-// The architecture compatible plugins are built for
-#define PKG_TARGET_ARCH "${ARCH}"
 
-// The version of gtk that has been used in the plugin build
-#define PKG_BUILD_GTK "${PKG_BUILD_GTK}"
+#define CMAKE_BINARY_DIR "${CMAKE_BINARY_DIR}"
 
-// Command line to play a sound in system(3), like "aplay %s".
-#define SYSTEM_SOUND_CMD  ${SYSTEM_SOUND_CMD}
+#define TEST_ROOT "${CMAKE_CURRENT_LIST_DIR}/test"
 
 // Flag for ancient compilers without C++11 support
 #cmakedefine COMPILER_SUPPORTS_CXX11
-
-#define OCPN_LINUX_LOAD_PATH  "${OCPN_LINUX_LOAD_PATH}"
-
 
 #define VERSION_MAJOR ${VERSION_MAJOR}
 #define VERSION_MINOR ${VERSION_MINOR}
 #define VERSION_PATCH ${VERSION_PATCH}
 #define VERSION_DATE "${VERSION_DATE}"
 #define VERSION_FULL "${PACKAGE_VERSION}"
+#define PACKAGE_VERSION "${PACKAGE_VERSION}"
+
+#define DEBIAN_PPA_VERSION "${DEB_VERSION}"
 
 #endif  // OCPN_CONFIG_H

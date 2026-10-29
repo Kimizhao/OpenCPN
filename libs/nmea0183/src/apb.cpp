@@ -40,8 +40,6 @@
 ** You can use it any way you like.
 */
 
-extern int              g_NMEAAPBPrecision;
-
 
 APB::APB()
 {
@@ -109,12 +107,12 @@ bool APB::Parse( const SENTENCE& sentence )
    */
 
    NMEA0183_BOOLEAN check = sentence.IsChecksumBad( 15 );
-   
+
    if ( check == NTrue )
    {
       SetErrorMessage( _T("Invalid Checksum") );
       return( FALSE );
-   } 
+   }
 
    /*
    ** Line has already been checked for checksum validity
@@ -145,27 +143,32 @@ bool APB::Write( SENTENCE& sentence )
    /*
    ** Let the parent do its thing
    */
-   
+
    RESPONSE::Write( sentence );
+
+   int NmeaApbPrecision = 3;
+   if (container_p) {
+     NmeaApbPrecision = container_p->caller_ctx.get_apb_precision();
+   }
 
    sentence += IsLoranBlinkOK;
    sentence += IsLoranCCycleLockOK;
-   sentence.Add( CrossTrackErrorMagnitude, g_NMEAAPBPrecision);
+   sentence.Add( CrossTrackErrorMagnitude, NmeaApbPrecision);
 
    if(DirectionToSteer == Left)
        sentence += _T("L");
    else
        sentence += _T("R");
-   
+
    sentence += CrossTrackUnits;
    sentence += IsArrivalCircleEntered;
    sentence += IsPerpendicular;
-   sentence.Add( BearingOriginToDestination, g_NMEAAPBPrecision);
+   sentence.Add( BearingOriginToDestination, NmeaApbPrecision);
    sentence += BearingOriginToDestinationUnits;
    sentence += To;
-   sentence.Add( BearingPresentPositionToDestination, g_NMEAAPBPrecision );
+   sentence.Add( BearingPresentPositionToDestination, NmeaApbPrecision );
    sentence += BearingPresentPositionToDestinationUnits;
-   sentence.Add( HeadingToSteer, g_NMEAAPBPrecision );
+   sentence.Add( HeadingToSteer, NmeaApbPrecision );
    sentence += HeadingToSteerUnits;
 
    sentence.Finish();

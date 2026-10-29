@@ -1,0 +1,47 @@
+/**************************************************************************
+ *   Copyright (C) 2015 by David S. Register                               *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, see <https://www.gnu.org/licenses/>. *
+ **************************************************************************/
+
+/**
+ * \file
+ *
+ * OpenCPN Android support utilities
+ */
+
+#ifndef ANDROIDSUPPORT_H
+#define ANDROIDSUPPORT_H
+
+#include <QString>
+
+#include <wx/wxprec.h>
+
+#ifndef WX_PRECOMP
+#include <wx/wx.h>
+#endif
+
+class ArrayOfCDI;
+
+bool AndroidUnzip(wxString zipFile, wxString destDir, int nStrip,
+                  bool bRemoveZip);
+wxString AndroidGetCacheDir();
+bool AndroidSecureCopyFile(wxString in, wxString out);
+void androidShowBusyIcon();
+void androidHideBusyIcon();
+void androidEnableRotation();
+void androidDisableRotation();
+int androidGetSDKVersion();
+
+#endif

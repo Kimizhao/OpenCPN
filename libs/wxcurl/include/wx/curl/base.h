@@ -84,7 +84,7 @@ public:     // misc getters
     wxDateTime GetDateTime() const { return m_dt; }
 
     //! Returns a number in [0;100] range indicating how much has been transferred so far.
-    double GetPercent() const 
+    double GetPercent() const
         { return GetTotalBytes() == 0 ? 0 : (100.0 * (GetTransferredBytes()/GetTotalBytes())); }
 
     //! Returns the current transfer speed in bytes/second.
@@ -143,7 +143,7 @@ protected:
     //       we cannot use wxDateTime::Now() there because once the event is constructed,
     //       GetElapsedTime() needs to return always the same value!
     wxDateTime m_dt;
-    
+
 public:
     static std::string GetNAText()
     {
@@ -159,7 +159,7 @@ public:
 
 //! This event gets posted by wxCURL with a frequent interval during operation
 //! (roughly once per second) no matter if data is being transfered or not.
-//! Unknown/unused argument values passed to the callback will be set to zero 
+//! Unknown/unused argument values passed to the callback will be set to zero
 //! (like if you only download data, the upload size will remain 0).
 //! Use the EVT_CURL_PROGRESS(id, function) macro to intercept this event.
 class WXDLLIMPEXP_CURL wxCurlDownloadEvent : public wxCurlProgressBaseEvent
@@ -167,7 +167,7 @@ class WXDLLIMPEXP_CURL wxCurlDownloadEvent : public wxCurlProgressBaseEvent
 public:
     wxCurlDownloadEvent();
     wxCurlDownloadEvent(int id, wxCurlBase *originator,
-                        const double& rDownloadTotal, const double& rDownloadNow, 
+                        const double& rDownloadTotal, const double& rDownloadNow,
                         const std::string& szURL = "");
     wxCurlDownloadEvent(const wxCurlDownloadEvent& event);
 
@@ -191,9 +191,6 @@ public:
 
 protected:
     double m_rDownloadTotal, m_rDownloadNow;
-
-private:
-    DECLARE_DYNAMIC_CLASS(wxCurlDownloadEvent);
 };
 
 typedef void (wxEvtHandler::*wxCurlDownloadEventFunction)(wxCurlDownloadEvent&);
@@ -207,7 +204,7 @@ typedef void (wxEvtHandler::*wxCurlDownloadEventFunction)(wxCurlDownloadEvent&);
 
 //! This event gets posted by wxCURL with a frequent interval during operation
 //! (roughly once per second) no matter if data is being transfered or not.
-//! Unknown/unused argument values passed to the callback will be set to zero 
+//! Unknown/unused argument values passed to the callback will be set to zero
 //! (like if you only download data, the upload size will remain 0).
 //! Use the EVT_CURL_PROGRESS(id, function) macro to intercept this event.
 class WXDLLIMPEXP_CURL wxCurlUploadEvent : public wxCurlProgressBaseEvent
@@ -215,7 +212,7 @@ class WXDLLIMPEXP_CURL wxCurlUploadEvent : public wxCurlProgressBaseEvent
 public:
     wxCurlUploadEvent();
     wxCurlUploadEvent(int id, wxCurlBase *originator,
-                        const double& rUploadTotal, const double& rUploadNow, 
+                        const double& rUploadTotal, const double& rUploadNow,
                         const std::string& szURL = "");
     wxCurlUploadEvent(const wxCurlUploadEvent& event);
 
@@ -238,9 +235,6 @@ public:
 
 protected:
     double m_rUploadTotal, m_rUploadNow;
-
-private:
-    DECLARE_DYNAMIC_CLASS(wxCurlUploadEvent);
 };
 
 typedef void (wxEvtHandler::*wxCurlUploadEventFunction)(wxCurlUploadEvent&);
@@ -273,9 +267,6 @@ public:
 
 protected:
     std::string m_szURL;
-
-private:
-    DECLARE_DYNAMIC_CLASS(wxCurlBeginPerformEvent);
 };
 
 typedef void (wxEvtHandler::*wxCurlBeginPerformEventFunction)(wxCurlBeginPerformEvent&);
@@ -315,9 +306,6 @@ public:
 protected:
     std::string	m_szURL;
     long		m_iResponseCode;
-
-private:
-    DECLARE_DYNAMIC_CLASS(wxCurlEndPerformEvent);
 };
 
 typedef void (wxEvtHandler::*wxCurlEndPerformEventFunction)(wxCurlEndPerformEvent&);
@@ -374,9 +362,9 @@ extern "C"
 class WXDLLIMPEXP_CURL wxCurlBase
 {
 public:
-    wxCurlBase(const wxString& szURL = wxEmptyString, 
+    wxCurlBase(const wxString& szURL = wxEmptyString,
                const wxString& szUserName = wxEmptyString,
-               const wxString& szPassword = wxEmptyString, 
+               const wxString& szPassword = wxEmptyString,
                wxEvtHandler* pEvtHandler = NULL, int id = wxID_ANY,
                long flags = wxCURL_DEFAULT_FLAGS);
 
@@ -408,7 +396,7 @@ public:
     //! the constructor.
     bool InitHandle();
 
-    //! Closes this libCURL session. This will effectively close all connections this handle 
+    //! Closes this libCURL session. This will effectively close all connections this handle
     //! has used and possibly has kept open until now.
     //! This function is automatically called by the destructor.
     bool CleanupHandle();

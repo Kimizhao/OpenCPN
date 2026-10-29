@@ -43,10 +43,10 @@
 
 class NMEA0183;
 
-class RESPONSE 
+class RESPONSE
 {
 
-   private:
+   protected:
 
       NMEA0183 *container_p;
 
@@ -76,5 +76,5 @@ class RESPONSE
 };
 
 
- 
+
 #endif // RESPONSE_CLASS_HEADER

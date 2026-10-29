@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2018 Alec Leamas <leamas@nowhere.net> -->
+<component type="desktop">
+  <id>org.opencpn.OpenCPN</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-2.0+</project_license>
+  <name>OpenCPN</name>
+  <developer id="org.opencpn.opencpn">
+      <name>The OpenCPN Community</name>
+  </developer>
+  <summary>Chartplotter and Navigation tool</summary>
+  <summary xml:lang="sv">Kartplotter och navigationsprogram</summary>
+  <provides>
+    <binary>opencpn</binary>
+  </provides>
+  <launchable type="desktop-id">opencpn.desktop</launchable>
+  <description>
+    <p>
+      A cross-platform ship-borne GUI navigation application made
+      up by a core program, a large set of plugins and freely
+      available charts.  The application is configurable with user
+      icon. The core supports:
+    </p>
+    <ul>
+      <li> GPS/GPSD Position Input and Display</li>
+      <li> BSB Raster Chart display </li>
+      <li> S57 Vector ENC and CM93 chart display </li>
+      <li> AIS Input Decoding and Display</li>
+      <li> Waypoint Autopilot Navigation </li>
+    </ul>
+    <p>
+      Plugin support includes wheather, tactical, annotations and tidal data.
+      Pilot charts can be downloaded from project website at opencpn.org.
+      Other useful add-ons may be found inside the "Download" link at
+      at the same site.
+    </p>
+  </description>
+  <releases>
+      <release version="@PACKAGE_VERSION@" date="@VERSION_DATE@"
+          timestamp="@UNIX_TIMESTAMP@">
+      <description>
+        <p>The latest upstream commit.</p>
+      </description>
+    </release>
+  </releases>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Main window</caption>
+      <image>https://download.opencpn.org/s/ZNRdz7K8XXdTxnR/download</image>
+    </screenshot>
+  </screenshots>
+  <url type="homepage">https://opencpn.org/</url>
+  <url type="vcs-browser">https://github.com/opencpn/OpenCPN/</url>
+  <url type="bugtracker">https://www.cruisersforum.com/forums/f134/</url>
+  <url type="help">https://opencpn.org/wiki/dokuwiki/doku.php?id=opencpn</url>
+  <url type="translate">https://crowdin.com/project/opencpn</url>
+  <url type="donation">https://www.paypal.com/donate/?item_name=Donation+to+OpenCPN&amp;cmd=_donations&amp;business=bdbcat%40yahoo.com</url>
+  <update_contact>https://opencpn.zulipchat.com/</update_contact>
+  <content_rating type="oars-1.0" />
+</component>

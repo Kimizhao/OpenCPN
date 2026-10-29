@@ -1,98 +1,126 @@
 ---
-version: 2
+# Buildpack images found at: https://hub.docker.com/_/buildpack-deps/
+
+version: 2.1
 jobs:
-   build-xenial:
-     docker:
-       - image: circleci/buildpack-deps:xenial-scm
-         auth:
-           username: $DOCKER_USER
-           password: $DOCKER_PW
-     environment:
-       - OCPN_TARGET:  xenial
-     steps:
-       - checkout
-       - run: cat /etc/apt/sources.list
-       - run: ci/generic-build-debian.sh
-       - run: ci/generic-upload.sh
-   build-trusty:
-     docker:
-       - image: circleci/buildpack-deps:trusty-scm
-         auth:
-           username: $DOCKER_USER
-           password: $DOCKER_PW
-     environment:
-       - OCPN_TARGET:  trusty
-     steps:
-       - checkout
-       - run: cat /etc/apt/sources.list
-       - run: ci/generic-build-debian.sh
-       - run: ci/generic-upload.sh
-   build-macos:
-     macos:
-       xcode: "11.3.0"
-     environment:
-       - OCPN_TARGET:  macos
-     steps:
-       - checkout
-       - restore_cache:
-          keys:
-            - macos-cache-v1-{{checksum "ci/generic-build-macos.sh"}}
-       - run: ci/generic-build-macos.sh
-       - save_cache:
-          key: macos-cache-v1-{{checksum "ci/generic-build-macos.sh"}}
+  build-bookworm:
+    docker:
+      - image: leamas/debian-git:bookworm
+        # bookworm-scm fails on non-existing /etc/apt/sources.list
+        # - image: buildpack-deps:bookworm-scm
+        auth:
+          username: $DOCKER_USER
+          password: $DOCKER_PW
+    environment:
+      - OCPN_TARGET: bookworm
+      - PACKAGE_BRANCH: ci/trixie-backports
+    steps:
+      - checkout
+      - run: cat /etc/apt/sources.list
+      - run: ci/generic-build-debian.sh
+      - run: ci/generic-upload.sh
+
+  build-jammy:
+    docker:
+      - image: leamas/ubuntu-git:jammy
+        # jammy-scm fails on missing sudo
+        # - image: buildpack-deps:jammy-scm
+        auth:
+          username: $DOCKER_USER
+          password: $DOCKER_PW
+    environment:
+      - OCPN_TARGET: jammy
+      - CMAKE_BUILD_PARALLEL_LEVEL: 2
+    steps:
+      - checkout
+      - run: cat /etc/apt/sources.list
+      - run: ci/generic-build-debian.sh
+      - run: ci/generic-upload.sh
+
+  build-flatpak:
+    working_directory: ~/OpenCPN
+    machine:
+      image: ubuntu-2404:current
+    environment:
+      - OCPN_TARGET: flatpak
+    steps:
+      # We maintain two caches, one for even build numbers and one for odd.
+      # flatpak-builder knows about what can be used in the cache, we just
+      # make sure that we always save existing data
+      - run: cd ~; git clone "$CIRCLE_REPOSITORY_URL" -b "$CIRCLE_BRANCH"
+      # - run: echo "CIRCLE_BUILD_NUM: $CIRCLE_BUILD_NUM"
+      - run: echo $((CIRCLE_BUILD_NUM % 2)) > .buildstamp
+      - restore_cache:
+          key: fp-v2-{{checksum ".buildstamp"}}
+      - run: ci/circleci-build-flatpak.sh
+      - run: echo $(((CIRCLE_BUILD_NUM + 1) % 2)) > .buildstamp
+      - save_cache:
+          key: fp-v2-{{checksum ".buildstamp"}}
           paths:
-            - /usr/local/Homebrew
-            - /usr/local/Caskroom
-            - /usr/local/Cellar
+            - build/.flatpak-builder/cache
+            - build/.flatpak-builder/ccache
+            - build/.flatpak-builder/checksums
+            - build/.flatpak-builder/downloads
+            - build/.flatpak-builder/rofiles
+      - run: ci/generic-upload.sh
+
+  build-android-armhf:
+    docker:
+      - image: cimg/android:2023.12-ndk
+    environment:
+      - OCPN_TARGET: android-armhf
+    steps:
+      - checkout
+      - run: ci/circleci-build-android-corelib-armhf.sh
+
+  build-macos-universal:
+    macos:
+      xcode: "15.4.0"
+    environment:
+      - OCPN_TARGET: macos
+      - pkg_mod: 11
+      - MACOSX_DEPLOYMENT_TARGET: 11.0
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - macos-cache-v2-universal-{{checksum "ci/macos-universal-deps.sh"}}-{{checksum "ci/universal-build-macos.sh"}}
+      - run: ci/macos-sign-setup.sh
+      - run: ci/universal-build-macos.sh
+      - run: ci/macos-sign-cleanup.sh
+      - save_cache:
+          key: macos-cache-v2-universal-{{checksum "ci/macos-universal-deps.sh"}}-{{checksum "ci/universal-build-macos.sh"}}
+          paths:
             - /usr/local/bin
             - /usr/local/include
             - /usr/local/lib
-            - /usr/local/opt
-       - run: ci/generic-upload.sh
-   build-flatpak:
-     working_directory: ~/OpenCPN
-     machine:
-         image: ubuntu-1604:201903-01
-     environment:
-       - OCPN_TARGET:  flatpak
-     steps:
-       - run: cd ~; git clone "$CIRCLE_REPOSITORY_URL" -b "$CIRCLE_BRANCH"
-       - run: ci/docker-auth.sh
-       - restore_cache:
-           keys:
-              - fp-cache-v1-{{checksum "flatpak/org.opencpn.OpenCPN.yaml"}}
-       - run: ci/circleci-build-flatpak.sh
-       - save_cache:
-           key: fp-cache-v1-{{checksum "flatpak/org.opencpn.OpenCPN.yaml"}}
-           paths:
-             - build/.flatpak-builder/cache
-             - build/.flatpak-builder/ccache
-             - build/.flatpak-builder/checksums
-             - build/.flatpak-builder/downloads
-             - build/.flatpak-builder/rofiles
+      - run: ci/generic-upload.sh
+
+std-filters: &std-filters
+  filters:
+    branches:
+      only:
+        - master
+        - build
+        - flatpak
+        - dpt
 
 
 workflows:
   version: 2
   build_all:
     jobs:
-      - build-xenial:
-          filters:
-            branches:
-              only:
-                - master
-      - build-trusty:
-          filters:
-            branches:
-              only:
-                - master
+      - build-bookworm:
+          <<: *std-filters
+
+      - build-jammy:
+          <<: *std-filters
+
       - build-flatpak:
-          filters:
-            branches:
-              only:
-                - flatpak
-      - build-macos:
-          filters:
-            branches:
-              only:
-                - master
+          <<: *std-filters
+
+      - build-android-armhf:
+          <<: *std-filters
+
+      - build-macos-universal:
+          <<: *std-filters

@@ -1,0 +1,159 @@
+/***************************************************************************
+ *   Copyright (C) 2022 David Register                                     *
+ *   Copyright (C) 2022 Alec Leamas                                        *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, see <https://www.gnu.org/licenses/>. *
+ **************************************************************************/
+
+/**
+ *  \file
+ *
+ *  Implement comm_drv_n0183_serial.h -- Network IP Nmea0183 driver.
+ */
+
+#include <mutex>  // std::mutex
+#include <queue>  // std::queue
+#include <vector>
+
+// For compilers that support precompilation, includes "wx.h".
+#include <wx/wxprec.h>
+
+#ifndef WX_PRECOMP
+#include <wx/wx.h>
+#endif
+
+#include <wx/log.h>
+#include <wx/string.h>
+
+#include "observable/observable.h"
+
+#include "model/comm_buffers.h"
+#include "model/comm_drv_n0183_serial.h"
+#include "model/comm_drv_stats.h"
+#include "model/logger.h"
+
+using namespace std::literals::chrono_literals;
+
+CommDriverN0183Serial::CommDriverN0183Serial(const ConnectionParams* params,
+                                             DriverListener& listener)
+    : CommDriverN0183(NavAddr::Bus::N0183, params->GetStrippedDSPort()),
+      m_portstring(params->GetDSPort()),
+      m_baudrate(params->baudrate),
+      m_serial_io(SerialIo::Create(
+          [&](const std::vector<unsigned char>& v) { SendMessage(v); },
+          m_portstring, m_baudrate)),
+      m_params(*params),
+      m_listener(listener),
+      m_stats_timer(*this, 2s) {
+  m_garmin_handler = nullptr;
+  this->attributes["commPort"] = params->serial_port.ToStdString();
+  this->attributes["userComment"] = params->user_comment.ToStdString();
+  this->attributes["ioDirection"] = PortDirectionToString(params->direction);
+
+  Open();
+}
+
+CommDriverN0183Serial::~CommDriverN0183Serial() { Close(); }
+
+bool CommDriverN0183Serial::Open() {
+  wxString comx;
+  comx = m_params.GetDSPort().AfterFirst(':');  // strip "Serial:"
+  if (comx.IsEmpty()) return false;
+
+  wxString port_uc = m_params.GetDSPort().Upper();
+
+  auto send_func = [&](const std::vector<unsigned char>& v) { SendMessage(v); };
+  if ((wxNOT_FOUND != port_uc.Find("USB")) &&
+      (wxNOT_FOUND != port_uc.Find("GARMIN"))) {
+    m_garmin_handler = new GarminProtocolHandler(comx, send_func, true);
+  } else if (m_params.is_garmin) {
+    m_garmin_handler = new GarminProtocolHandler(comx, send_func, false);
+  } else {
+    //    Kick off the  RX thread
+    m_serial_io->Start();
+  }
+
+  return true;
+}
+
+void CommDriverN0183Serial::Close() {
+  wxLogMessage(
+      wxString::Format("Closing NMEA Driver %s", m_portstring.c_str()));
+
+  m_stats_timer.Stop();
+
+  //    Kill off the secondary RX IO if alive
+  if (m_serial_io->IsRunning()) {
+    wxLogMessage("Stopping Secondary Thread");
+    m_serial_io->RequestStop();
+    std::chrono::milliseconds elapsed;
+    if (m_serial_io->WaitUntilStopped(10s, elapsed)) {
+      MESSAGE_LOG << "Stopped in " << elapsed.count() << " msec.";
+    } else {
+      MESSAGE_LOG << "Not stopped after 10 sec.";
+    }
+  }
+
+  //  Kill off the Garmin handler, if alive
+  if (m_garmin_handler) {
+    m_garmin_handler->Close();
+    delete m_garmin_handler;
+    m_garmin_handler = nullptr;
+  }
+}
+
+bool CommDriverN0183Serial::IsGarminThreadActive() const {
+  if (m_garmin_handler) {
+    // TODO expand for serial
+#ifdef __WXMSW__
+    if (m_garmin_handler->m_usb_handle != INVALID_HANDLE_VALUE)
+      return true;
+    else
+      return false;
+#endif
+  }
+
+  return false;
+}
+
+void CommDriverN0183Serial::StopGarminUSBIOThread(bool b_pause) const {
+  if (m_garmin_handler) {
+    m_garmin_handler->StopIOThread(b_pause);
+  }
+}
+
+bool CommDriverN0183Serial::SendMessage(std::shared_ptr<const NavMsg> msg,
+                                        std::shared_ptr<const NavAddr> addr) {
+  auto msg_0183 = std::dynamic_pointer_cast<const Nmea0183Msg>(msg);
+  wxString sentence(msg_0183->payload.c_str());
+
+  if (m_serial_io->IsRunning()) {
+    for (int retries = 0; retries < 10; retries += 1) {
+      if (m_serial_io->SetOutMsg(sentence)) {
+        return true;
+      }
+    }
+    return false;  // could not send after several tries....
+  } else {
+    return false;
+  }
+}
+
+void CommDriverN0183Serial::SendMessage(const std::vector<unsigned char>& msg) {
+  // Is this an output-only port?
+  // Commonly used for "Send to GPS" function
+  if (m_params.direction == PortDirection::kOutput) return;
+
+  SendToListener({msg.begin(), msg.end()}, m_listener, m_params);
+}

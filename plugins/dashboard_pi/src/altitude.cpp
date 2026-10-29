@@ -1,0 +1,389 @@
+/**************************************************************************
+ *   Copyright (C) 2010 by David S. Register                               *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, see <https://www.gnu.org/licenses/>. *
+ **************************************************************************/
+
+/**
+ * \file
+ *
+ * Dashboard Plugin, display altitude trace.
+ *
+ * Derived from Jean-Eudes Onfray's depth.cpp by Andreas Merz.
+ *
+ * Since not every vessel is always on sea level, I found it
+ * sometimes interesting to observe the GPS altitude information.
+ * It can be extracted from the GGA nmea message.
+ *
+ * Besides showing a rolling plot, the grid will auto-rescale to
+ * keep the plot within the visible range.
+ * The top line shows mean altitude and its standard deviation.
+ */
+
+#include <wx/wxprec.h>
+
+#ifndef WX_PRECOMP
+#include <wx/wx.h>
+#endif
+
+#include "altitude.h"
+extern int g_iDashDepthUnit;  // use same unit for altitude
+
+int m_aDataHeight;
+int x_alabel, y_alabel, a_plotdown, a_plotup, a_plotheight;
+
+DashboardInstrument_Altitude::DashboardInstrument_Altitude(
+    wxWindow* parent, wxWindowID id, wxString title,
+    InstrumentProperties* Properties)
+    : DashboardInstrument(parent, id, title, OCPN_DBP_STC_ALTI, Properties) {
+  m_cap_flag.set(OCPN_DBP_STC_TMP);
+  m_max_altitude = 0;
+  m_altitude = 0;
+  m_altitude_unit = getUsrDistanceUnit_Plugin(g_iDashDepthUnit);
+  m_temp = "--";
+  for (int idx = 0; idx < ALTITUDE_RECORD_COUNT; idx++) {
+    m_array_altitude[idx] = 0.0;
+  }
+}
+
+wxSize DashboardInstrument_Altitude::GetSize(int orient, wxSize hint) {
+  wxClientDC dc(this);
+  int w;
+  wxFont f;
+  if (m_Properties) {
+    f = m_Properties->m_TitleFont.GetChosenFont();
+    dc.GetTextExtent(m_title, &w, &m_TitleHeight, nullptr, nullptr, &f);
+    f = m_Properties->m_DataFont.GetChosenFont();
+    dc.GetTextExtent("15.7 Feet", &w, &m_aDataHeight, nullptr, nullptr, &f);
+    f = m_Properties->m_LabelFont.GetChosenFont();
+    dc.GetTextExtent("20.8 C", &x_alabel, &y_alabel, nullptr, nullptr, &f);
+  } else {
+    f = g_pFontTitle->GetChosenFont();
+    dc.GetTextExtent(m_title, &w, &m_TitleHeight, nullptr, nullptr, &f);
+    f = g_pFontData->GetChosenFont();
+    dc.GetTextExtent("15.7 Feet", &w, &m_aDataHeight, nullptr, nullptr, &f);
+    // Space for bottom(temp)text later.
+    f = g_pFontLabel->GetChosenFont();
+    dc.GetTextExtent("20.8 C", &x_alabel, &y_alabel, nullptr, nullptr, &f);
+  }
+  int y_total =
+      //  Title         Alt. data       plot area     air-temp
+      m_TitleHeight + m_aDataHeight + 4 * m_aDataHeight + y_alabel;
+  if (orient == wxHORIZONTAL) {
+    return {DefaultWidth, wxMax(y_total, hint.y)};
+  } else {
+    return {wxMax(hint.x, DefaultWidth), y_total};
+  }
+}
+
+void DashboardInstrument_Altitude::SetData(DASH_CAP st, double data,
+                                           wxString unit) {
+  if (st == OCPN_DBP_STC_ALTI) {
+    if (std::isnan(data)) {
+      m_cnt_valid = 0;
+      m_altitude = 0.0;
+    } else {
+      m_altitude = data;
+      // m_Altitude = m_Altitude*10.0 +1000;       // inject fake testdata
+      if (m_cnt_valid < ALTITUDE_RECORD_COUNT && data != 0.0) m_cnt_valid++;
+    }
+    // printf("Altitude = %3.3f  # %2d ", m_Altitude, m_cntValid); // debug
+
+    if (m_cnt_valid == 1) {
+      for (int idx = 1; idx < ALTITUDE_RECORD_COUNT; idx++) {
+        m_array_altitude[idx - 1] =
+            m_altitude;  // init FIFO with 1st valid data
+      }
+    } else {
+      for (int idx = 1; idx < ALTITUDE_RECORD_COUNT; idx++) {
+        m_array_altitude[idx - 1] = m_array_altitude[idx];  // shift FIFO
+      }
+    }
+    m_array_altitude[ALTITUDE_RECORD_COUNT - 1] = m_altitude;
+    m_altitude_unit = unit;
+  } else if (st == OCPN_DBP_STC_ATMP) {  // Air Temperature
+    if (!std::isnan(data)) {
+      m_temp = wxString::Format("%.1f", data) + DEGREE_SIGN + unit;
+    } else {
+      m_temp = "---";
+    }
+  }
+}
+
+void DashboardInstrument_Altitude::SetAttenuation(int steps) {
+  // fast int stuff
+  // increase the attenuation in 1 2 5 10 20 50 steps
+  if (steps > 0)
+    while (steps--) {
+      switch (m_attenuation) {
+        case 1:
+          m_attenuation = 2;
+          break;
+        case 2:
+          m_attenuation = 5;
+          break;
+        default:
+          m_attenuation = 1;
+          m_decade *= 10;
+      }
+    }
+  // decrease the attenuation in 1 2 5 10 20 50 steps
+  else if (steps < 0)
+    while (steps++) {
+      switch (m_attenuation) {
+        case 5:
+          m_attenuation = 2;
+          break;
+        case 2:
+          m_attenuation = 1;
+          break;
+        default:
+          m_attenuation = 5;
+          m_decade /= 10;
+      }
+    }
+  // bottom limit: unity
+  if (m_decade < 1) {
+    m_decade = 1;
+    m_attenuation = 1;
+  }
+}
+
+int DashboardInstrument_Altitude::GetAttenuation() const {
+  return m_attenuation * m_decade;
+}
+
+void DashboardInstrument_Altitude::Draw(wxGCDC* dc) {
+  DrawBackground(dc);
+  DrawForeground(dc);
+}
+
+void DashboardInstrument_Altitude::DrawBackground(wxGCDC* dc) {
+  wxSize size = GetClientSize();
+  wxColour cl;
+  if (m_Properties) {
+    dc->SetTextForeground(
+        GetColourSchemeFont(m_Properties->m_LabelFont.GetColour()));
+  } else {
+    if (GetColourSchemeFont(g_pFontSmall->GetColour()) ==
+        GetColourSchemeFont(g_pFontLabel->GetColour())) {
+      GetGlobalColor("DASHL", &cl);
+      dc->SetTextForeground(cl);
+    } else
+      dc->SetTextForeground(GetColourSchemeFont(g_pFontLabel->GetColour()));
+  }
+
+  wxPen pen;
+  pen.SetStyle(wxPENSTYLE_SOLID);
+  if (m_Properties)
+    cl = GetColourSchemeFont(m_Properties->m_SmallFont.GetColour());
+  else
+    cl = GetColourSchemeFont(g_pFontSmall->GetColour());
+  // GetGlobalColor("DASHF", &cl);
+  pen.SetColour(cl);
+  pen.SetWidth(1);
+  dc->SetPen(pen);
+
+  a_plotup = m_TitleHeight + m_aDataHeight;
+  a_plotdown = size.y - y_alabel;
+  a_plotheight = a_plotdown - a_plotup;
+
+  // dc->DrawLine(3,  44, size.x - 3,  44);
+  dc->DrawLine(3, a_plotdown, size.x - 3, a_plotdown);
+
+#ifdef __WXMSW__
+  pen.SetStyle(wxPENSTYLE_SHORT_DASH);
+#else
+  pen.SetStyle(wxPENSTYLE_DOT);
+  pen.SetWidth(1);
+#endif
+
+  // Grid lines
+  dc->SetPen(pen);
+  dc->DrawLine(3, a_plotup, size.x - 3, a_plotup);
+  dc->DrawLine(3, a_plotup + a_plotheight / 4, size.x - 3,
+               a_plotup + a_plotheight / 4);
+  dc->DrawLine(3, a_plotup + a_plotheight * 2 / 4, size.x - 3,
+               a_plotup + a_plotheight * 2 / 4);
+  dc->DrawLine(3, a_plotup + a_plotheight * 3 / 4, size.x - 3,
+               a_plotup + a_plotheight * 3 / 4);
+  if (m_Properties) {
+    dc->SetFont(m_Properties->m_SmallFont.GetChosenFont());
+    dc->SetTextForeground(
+        GetColourSchemeFont(m_Properties->m_SmallFont.GetColour()));
+  } else {
+    dc->SetFont(g_pFontSmall->GetChosenFont());
+    dc->SetTextForeground(GetColourSchemeFont(g_pFontSmall->GetColour()));
+  }
+
+  // evaluate buffered data to determine its range, mean, variance
+  m_mean_altitude = m_array_altitude[0];  // moving average
+  double MaxAltitude = m_array_altitude[0];
+  double MinAltitude = m_array_altitude[0];
+  double sum2Altitude = m_array_altitude[0] * m_array_altitude[0];  // sum^2
+  for (int idx = 1; idx < ALTITUDE_RECORD_COUNT; idx++) {
+    MaxAltitude = std::max(MaxAltitude, m_array_altitude[idx]);
+    MinAltitude = std::min(MinAltitude, m_array_altitude[idx]);
+    m_mean_altitude += m_array_altitude[idx];
+    sum2Altitude += m_array_altitude[idx] * m_array_altitude[idx];
+  }
+  m_mean_altitude /= ALTITUDE_RECORD_COUNT;
+
+  // calculate 2nd Moment
+  double varAltitude = sum2Altitude / ALTITUDE_RECORD_COUNT;
+  varAltitude -= m_mean_altitude * m_mean_altitude;
+  // estimator bias correction
+  varAltitude *= (ALTITUDE_RECORD_COUNT / (ALTITUDE_RECORD_COUNT - 1.0));
+  // printf("varAltitude = %5.3f\n", varAltitude);  // debug output
+  if (varAltitude < 0.0) varAltitude = 0.0;  // avoid nan when calling sqrt().
+
+  // do AGC to adjust scaling
+  double range = MaxAltitude - MinAltitude;
+  if (range > 1.1 * m_range) SetAttenuation(+1);
+  if (range < 0.3 * m_range) SetAttenuation(-1);  // some hysteresis
+  double grid = GetAttenuation();
+  m_range = grid * c_grid_lines;
+
+  // only update axes on major corridor changes
+  if ((MaxAltitude - m_max_altitude) / grid > 0.25 ||
+      (MaxAltitude - m_max_altitude) / grid < -0.75 * c_grid_lines) {
+    m_max_altitude = (round(MaxAltitude / grid) + 1) * grid;
+    m_min_altitude = m_max_altitude - m_range;
+  }
+  if ((MinAltitude - m_min_altitude) / grid < -0.25 ||
+      (MinAltitude - m_min_altitude) / grid > 0.75 * c_grid_lines) {
+    m_min_altitude = (round(MinAltitude / grid) - 1) * grid;
+    m_max_altitude = m_min_altitude + m_range;
+  }
+  // debug output
+  // printf("m_MinAltitude=%7.1f  m_MaxAltitude=%7.1f  m_Range = %5.1f "
+  //        " range = %5.1f  att=%d , mean=%7.2f, std=%5.2f\n",
+  //        m_MinAltitude, m_MaxAltitude, m_Range,
+  //        range, getAttenuation(), m_meanAltitude, sqrt(varAltitude));
+
+  wxString label;
+  label.Printf("+/-%.1f %8.0f " + m_altitude_unit, sqrt(varAltitude),
+               m_max_altitude);
+  int width, height;
+  wxFont f;
+  if (m_Properties)
+    f = m_Properties->m_SmallFont.GetChosenFont();
+  else
+    f = g_pFontSmall->GetChosenFont();
+  dc->GetTextExtent(label, &width, &height, 0, 0, &f);
+  dc->DrawText(label, size.x - width - 1, a_plotup - height);
+
+  label.Printf("%.1f/ %8.0f " + m_altitude_unit, m_range / c_grid_lines,
+               m_min_altitude);
+  if (m_Properties)
+    f = m_Properties->m_SmallFont.GetChosenFont();
+  else
+    f = g_pFontSmall->GetChosenFont();
+  dc->GetTextExtent(label, &width, &height, 0, 0, &f);
+  dc->DrawText(label, size.x - width - 1, a_plotdown);
+}
+
+void DashboardInstrument_Altitude::DrawForeground(wxGCDC* dc) {
+  wxSize size = GetClientSize();
+  wxColour cl;
+  if (m_Properties) {
+    cl = GetColourSchemeFont(m_Properties->m_LabelFont.GetColour());
+  } else {
+    if (GetColourSchemeFont(g_pFontSmall->GetColour()) ==
+        GetColourSchemeFont(g_pFontLabel->GetColour()))
+      GetGlobalColor("DASH1", &cl);
+    else
+      cl = GetColourSchemeFont(g_pFontLabel->GetColour());
+  }
+  // GetGlobalColor("DASH1", &cl);
+  wxBrush brush;
+  brush.SetStyle(wxBRUSHSTYLE_SOLID);
+  brush.SetColour(cl);
+  dc->SetBrush(brush);
+  dc->SetPen(*wxTRANSPARENT_PEN);
+
+  double ratioH = double(a_plotheight) / m_range;
+  double ratioW = double(size.x - 6) / (ALTITUDE_RECORD_COUNT - 1);
+  wxPoint points[ALTITUDE_RECORD_COUNT + 2];
+#ifdef __ANDROID__
+  int px = 3;
+  points[0].x = px;
+  points[0].y = a_plotdown;
+
+  for (int idx = 0; idx < ALTITUDE_RECORD_COUNT - 1; idx++) {
+    points[1].x = points[0].x;
+    if (m_array_altitude[idx])
+      points[1].y =
+          a_plotdown - (m_array_altitude[idx] - m_min_altitude) * ratioH;
+    else
+      points[1].y = a_plotdown;
+
+    points[2].x = points[1].x + ratioW;
+    if (m_array_altitude[idx + 1])
+      points[2].y =
+          a_plotdown - (m_array_altitude[idx + 1] - m_min_altitude) * ratioH;
+    else
+      points[2].y = a_plotdown;
+
+    points[3].x = points[2].x;
+    points[3].y = a_plotdown;
+    dc->DrawPolygon(4, points);
+
+    points[0].x = points[2].x;
+    points[0].y = a_plotdown;
+  }
+
+#else
+  for (int idx = 0; idx < ALTITUDE_RECORD_COUNT; idx++) {
+    points[idx].x = idx * ratioW + 3;
+    points[idx].y =
+        a_plotdown - (m_array_altitude[idx] - m_min_altitude) * ratioH;
+  }
+  points[ALTITUDE_RECORD_COUNT].x = size.x - 3;
+  points[ALTITUDE_RECORD_COUNT].y = a_plotdown;
+  points[ALTITUDE_RECORD_COUNT + 1].x = 3;
+  points[ALTITUDE_RECORD_COUNT + 1].y = a_plotdown;
+  dc->DrawPolygon(ALTITUDE_RECORD_COUNT + 2, points);
+#endif
+  if (m_Properties) {
+    dc->SetFont(m_Properties->m_DataFont.GetChosenFont());
+    dc->SetTextForeground(
+        GetColourSchemeFont(m_Properties->m_DataFont.GetColour()));
+  } else {
+    // GetGlobalColor("DASHF", &cl);
+    dc->SetTextForeground(GetColourSchemeFont(g_pFontData->GetColour()));
+    dc->SetFont(g_pFontData->GetChosenFont());
+  }
+  if (m_altitude_unit != "-") {  // Watchdog
+    wxString s_alti = wxString::Format("%.1f", m_mean_altitude);
+    dc->DrawText(s_alti + " " + m_altitude_unit, 10, m_TitleHeight);
+  } else
+    dc->DrawText("---", 10, m_TitleHeight);
+
+  // TODO: test display air temperature ID_DBP_I_ATMP
+  if (m_Properties)
+    dc->SetFont(m_Properties->m_LabelFont.GetChosenFont());
+  else
+    dc->SetFont(g_pFontLabel->GetChosenFont());
+  int width, height;
+  wxFont f;
+  if (m_Properties) {
+    f = m_Properties->m_LabelFont.GetChosenFont();
+    dc->GetTextExtent(m_temp, &width, &height, 0, 0, &f);
+  } else {
+    f = g_pFontLabel->GetChosenFont();
+    dc->GetTextExtent(m_temp, &width, &height, 0, 0, &f);
+  }
+  dc->DrawText(m_temp, 3, a_plotdown);
+}

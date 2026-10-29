@@ -333,7 +333,9 @@ OGRGeometryH OGRBuildPolygonFromEdges( OGRGeometryH hLines,
         //  Clearly unuseable as a contour, so discard it.
         if(poRing->getNumPoints() >= 3)
             poPolygon->addRingDirectly( poRing );
-        
+        else
+            delete poRing;
+
     } /* next ring */
 
 /* -------------------------------------------------------------------- */

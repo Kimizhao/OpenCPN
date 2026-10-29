@@ -1,0 +1,62 @@
+/*************************************************************************
+ *
+ * Copyright (C) 2022 - 2025 Alec Leamas
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see <https://www.gnu.org/licenses/>.
+ **************************************************************************/
+
+/**
+ *\file
+ *
+ * wxCommandEvt subclass which can carry also a shared_ptr<void>
+ *
+ * This definition is duplicated and used also in the plugin interface
+ */
+
+#ifndef OBSERVABLE_EVT_H  // Guard also used in ocpn_plugin.h
+#define OBSERVABLE_EVT_H
+
+#include <memory>
+
+#include <wx/event.h>
+
+/** The event used by notify/listen. */
+class ObservedEvt;
+
+wxDECLARE_EVENT(obsNOTIFY, ObservedEvt);
+
+/**
+ * Adds a std::shared<void> element to wxCommandEvent. A copy is present
+ * in ocpn_plugin.h, so cannot be modified.
+ */
+class ObservedEvt : public wxCommandEvent {
+public:
+  explicit ObservedEvt(wxEventType commandType = obsNOTIFY, int id = 0)
+      : wxCommandEvent(commandType, id) {}
+
+  ObservedEvt(const ObservedEvt& event) : wxCommandEvent(event) {
+    this->m_shared_ptr = event.m_shared_ptr;
+  }
+
+  [[nodiscard]] wxEvent* Clone() const override{ return new ObservedEvt(*this); }
+
+  [[nodiscard]] std::shared_ptr<const void> GetSharedPtr() const { return m_shared_ptr; }
+
+  void SetSharedPtr(const std::shared_ptr<const void> p) { m_shared_ptr = p; }
+
+private:
+  std::shared_ptr<const void> m_shared_ptr;
+};
+
+#endif  // OBSERVABLE_EVT_H

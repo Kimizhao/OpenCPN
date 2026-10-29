@@ -12,6 +12,10 @@
 //////////////////////////////////////////////////////////////////////
 // Headers
 //////////////////////////////////////////////////////////////////////
+#include <cmath> // for isnan
+#include <string>
+#include <stdio.h>
+#include <stdarg.h>
 
 #include "wx/wxprec.h"
 
@@ -20,15 +24,14 @@
 #endif
 
 #ifdef __WXMSW__
-    #include <wx/msw/msvcrt.h>      // useful to catch memory leaks when compiling under MSVC 
+    #include <wx/msw/msvcrt.h>      // useful to catch memory leaks when compiling under MSVC
 #endif
 
-#include <stdio.h>
-#include <stdarg.h>
 
 #include <wx/curl/base.h>
 #include <wx/filename.h>
-#include <cmath> // for isnan
+
+
 
 
 //////////////////////////////////////////////////////////////////////
@@ -39,9 +42,29 @@
 // C Functions for LibCURL
 //////////////////////////////////////////////////////////////////////
 
+
+static bool replace(std::string& str, const std::string& from,
+                    const std::string& to) {
+  size_t start_pos = str.find(from);
+  if (start_pos == std::string::npos) return false;
+  str.replace(start_pos, from.length(), to);
+  return true;
+}
+
+
+static std::string GetUserAgent() {
+  std::string ua = "Mozilla/5.0 (@abi@; @abi_version@) OpenCPN/@o_version@";
+  ua += " curl/@curl_version@";
+  replace(ua, "@o_version@", WXCURL_OCPN_VERSION);
+  replace(ua, "@abi@", WXCURL_ABI);
+  replace(ua, "@abi_version@", WXCURL_ABI_VERSION);
+  replace(ua, "@curl_version@", LIBCURL_VERSION);
+  return ua;
+}
+
 extern "C"
 {
-    int wxcurl_evt_progress_func(void* ptr, double rDlTotal, double rDlNow, 
+    int wxcurl_evt_progress_func(void* ptr, double rDlTotal, double rDlNow,
                                  double rUlTotal, double rUlNow)
     {
         wxCurlBase *curl = wx_static_cast(wxCurlBase*, ptr);
@@ -273,8 +296,6 @@ std::string wxCurlProgressBaseEvent::GetHumanReadableSpeed(const std::string &in
 
 DEFINE_EVENT_TYPE(wxCURL_DOWNLOAD_EVENT);
 
-IMPLEMENT_DYNAMIC_CLASS(wxCurlDownloadEvent, wxEvent);
-
 wxCurlDownloadEvent::wxCurlDownloadEvent()
 : wxCurlProgressBaseEvent(-1, wxCURL_DOWNLOAD_EVENT),
   m_rDownloadTotal(0.0), m_rDownloadNow(0.0)
@@ -282,7 +303,7 @@ wxCurlDownloadEvent::wxCurlDownloadEvent()
 }
 
 wxCurlDownloadEvent::wxCurlDownloadEvent(int id, wxCurlBase *originator,
-                                        const double& rDownloadTotal, const double& rDownloadNow, 
+                                        const double& rDownloadTotal, const double& rDownloadNow,
                                         const std::string& szURL /*= wxEmptyString*/)
 : wxCurlProgressBaseEvent(id, wxCURL_DOWNLOAD_EVENT, originator, szURL),
 m_rDownloadTotal(rDownloadTotal), m_rDownloadNow(rDownloadNow)
@@ -308,8 +329,6 @@ wxCurlDownloadEvent::wxCurlDownloadEvent(const wxCurlDownloadEvent& event)
 
 DEFINE_EVENT_TYPE(wxCURL_UPLOAD_EVENT);
 
-IMPLEMENT_DYNAMIC_CLASS(wxCurlUploadEvent, wxEvent);
-
 wxCurlUploadEvent::wxCurlUploadEvent()
 : wxCurlProgressBaseEvent(-1, wxCURL_UPLOAD_EVENT),
   m_rUploadTotal(0.0), m_rUploadNow(0.0)
@@ -317,7 +336,7 @@ wxCurlUploadEvent::wxCurlUploadEvent()
 }
 
 wxCurlUploadEvent::wxCurlUploadEvent(int id, wxCurlBase *originator,
-                                        const double& rUploadTotal, const double& rUploadNow, 
+                                        const double& rUploadTotal, const double& rUploadNow,
                                         const std::string& szURL /*= wxEmptyString*/)
 : wxCurlProgressBaseEvent(id, wxCURL_UPLOAD_EVENT, originator, szURL),
 m_rUploadTotal(rUploadTotal), m_rUploadNow(rUploadNow)
@@ -342,8 +361,6 @@ wxCurlUploadEvent::wxCurlUploadEvent(const wxCurlUploadEvent& event)
 //////////////////////////////////////////////////////////////////////
 
 DEFINE_EVENT_TYPE(wxCURL_BEGIN_PERFORM_EVENT);
-
-IMPLEMENT_DYNAMIC_CLASS(wxCurlBeginPerformEvent, wxEvent);
 
 wxCurlBeginPerformEvent::wxCurlBeginPerformEvent()
 : wxEvent(-1, wxCURL_BEGIN_PERFORM_EVENT)
@@ -371,8 +388,6 @@ wxCurlBeginPerformEvent::wxCurlBeginPerformEvent(const wxCurlBeginPerformEvent& 
 //////////////////////////////////////////////////////////////////////
 
 DEFINE_EVENT_TYPE(wxCURL_END_PERFORM_EVENT);
-
-IMPLEMENT_DYNAMIC_CLASS(wxCurlEndPerformEvent, wxEvent);
 
 wxCurlEndPerformEvent::wxCurlEndPerformEvent()
 : wxEvent(-1, wxCURL_END_PERFORM_EVENT),
@@ -417,7 +432,7 @@ m_iHostPort(-1),
 m_iResponseCode(-1),
 m_pHeaders(NULL),
 m_bUseProxy(false),
-m_iProxyPort(-1), 
+m_iProxyPort(-1),
 m_bVerbose(false),
 m_pEvtHandler(pEvtHandler),
 m_nId(id),
@@ -490,7 +505,7 @@ bool wxCurlBase::SetStringOpt(CURLoption option, const wxCharBuffer &str)
     //                 for all the time it's owned by libCURL
 
     /*  FIXME: converting to plain ASCII is not always the Best Thing. E.g.
-            for CURLOPT_USERPWD, we'd need to consult RFC2616 (HTTP) or 
+            for CURLOPT_USERPWD, we'd need to consult RFC2616 (HTTP) or
             another RFC depending on the authentication system in use, etc etc
             For now we convert to pure ASCII which in 99% of the cases will
             Just Do the Work
@@ -647,7 +662,7 @@ void wxCurlBase::SetURL(const wxString& szRelativeURL)
 }
 
 std::string wxCurlBase::GetURL() const
-{ 
+{
     wxString s = wxCURL_BUF2STRING(m_szCurrFullURL);
     return std::string(s.mb_str());
 }
@@ -831,14 +846,15 @@ void wxCurlBase::SetCurlHandleToDefaults(const wxString& relativeURL)
         SetOpt(CURLOPT_HEADERFUNCTION, wxcurl_header_func);
         SetOpt(CURLOPT_WRITEHEADER, &m_szResponseHeader);
         SetOpt(CURLOPT_ERRORBUFFER, m_szDetailedErrorBuffer);
-        SetOpt(CURLOPT_USERAGENT, "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:35.0) Gecko/20100101 Firefox/35.0\r\n" \
-                    "Accept: */*\r\n" \
-                    "Connection: keep-alive"); //Pretend we are a normal browser
+        SetOpt(CURLOPT_USERAGENT, GetUserAgent().c_str());
+        SetOpt(CURLOPT_ACCEPT_ENCODING, "*/*");
+        SetOpt(CURLOPT_TCP_KEEPALIVE, 1);
         SetOpt(CURLOPT_FOLLOWLOCATION, 1L);
 #ifdef __WXMSW__
         SetOpt(CURLOPT_CAINFO, "curl-ca-bundle.crt"); //Use our local certificate list on Windows
-        SetOpt(CURLOPT_SSL_VERIFYPEER, true);		// FIXME: Temporary until we get certificates working
+        //SetOpt(CURLOPT_SSL_VERIFYPEER, true);		// FIXME: Temporary until we get certificates working
 #endif
+        SetOpt(CURLOPT_SSL_VERIFYPEER, false); //cURL does not support Authority Information Access (AIA) X.509 extension (https://github.com/curl/curl/issues/2793). Unfortunately as of 2021/07 at least LINZ does not provide full trust chain in their TLS certificate and depends on the client's ability to use AIA and download the missing certs which makes the site untrusted for us (And we have to ignore it here to be able to download the chart archives)
         SetOpt(CURLOPT_ENCODING, "gzip,deflate"); //Save bandwidth by using compression
 
         if(m_pEvtHandler && (m_nFlags & wxCURL_SEND_PROGRESS_EVENTS))

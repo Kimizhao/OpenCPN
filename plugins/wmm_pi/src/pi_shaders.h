@@ -1,8 +1,4 @@
-/***************************************************************************
- *
- * Project:  OpenCPN
- *
- ***************************************************************************
+/**************************************************************************
  *   Copyright (C) 2017 by David S. Register                               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -16,26 +12,30 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
+ *   along with this program; if not, see <https://www.gnu.org/licenses/>. *
  **************************************************************************/
+
+/**
+ * \file
+ *
+ * OpenGL shaders
+ */
 
 #ifndef __PISHADERS_H__
 #define __PISHADERS_H__
 
-#include "wx/wxprec.h"
-#ifndef  WX_PRECOMP
-#include "wx/wx.h"
-#endif //precompiled headers
+#include <wx/wxprec.h>
 
-#include <gl2.h>
+#ifndef WX_PRECOMP
+#include <wx/wx.h>
+#endif
 
-    extern GLint pi_color_tri_shader_program;
-    extern GLint pi_colorv_tri_shader_program;
-    extern GLint pi_texture_2D_shader_program;
-    extern GLint pi_circle_filled_shader_program;
-    
+#include <GLES2/gl2.h>
+
+extern GLint pi_color_tri_shader_program;
+extern GLint pi_colorv_tri_shader_program;
+extern GLint pi_texture_2D_shader_program;
+extern GLint pi_circle_filled_shader_program;
 
 bool pi_loadShaders();
 void configureShaders(float width, float height);

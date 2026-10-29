@@ -40,7 +40,7 @@ enum
 class WXDLLIMPEXP_CURL wxCurlConnectionSettingsPanel : public wxPanel
 {
 public:
-    wxCurlConnectionSettingsPanel() 
+    wxCurlConnectionSettingsPanel()
     {
         m_pUsername = NULL;
         m_pPassword = NULL;
@@ -93,9 +93,7 @@ protected:      // controls
 
 private:
     DECLARE_EVENT_TABLE()
-    DECLARE_DYNAMIC_CLASS(wxCurlConnectionSettingsPanel)
 };
 
 
 #endif // _WXCURL_PANEL_H_
-

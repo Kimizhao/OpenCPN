@@ -1,142 +1,155 @@
-##---------------------------------------------------------------------------
-## Author:      nohal aka. Pavel Kalian
-## Copyright:   
-## License:     wxWidgets License
-##---------------------------------------------------------------------------
- 
+# ---------------------------------------------------------------------------
+# Author:    nohal aka. Pavel Kalian
+# Copyright: 2012-2025, Pavel Kalian
+# License:   wxWidgets License
+# ---------------------------------------------------------------------------
+
 # define minimum cmake version
-CMAKE_MINIMUM_REQUIRED(VERSION 3.1.1)
-CMAKE_POLICY(SET CMP0043 NEW)
+cmake_minimum_required(VERSION 3.10)
+cmake_policy(SET CMP0043 NEW)
 
-PROJECT(wmm_pi)
+project(wmm_pi)
 
-SET(PACKAGE_NAME wmm_pi)
-SET(VERBOSE_NAME Wmm)
-SET(TITLE_NAME WMM)
-SET(CPACK_PACKAGE_CONTACT "Pavel Kalian")
+set(PACKAGE_NAME wmm_pi)
+set(VERBOSE_NAME Wmm)
+set(TITLE_NAME WMM)
+set(CPACK_PACKAGE_CONTACT "Pavel Kalian")
 
-SET(VERSION_MAJOR "1")
-SET(VERSION_MINOR "1")
-SET(VERSION_PATCH "2")
-SET(VERSION_DATE "12/09/2019")
+set(VERSION_MAJOR "1")
+set(VERSION_MINOR "1")
+set(VERSION_PATCH "2")
+set(VERSION_DATE "12/09/2019")
 
-IF( NOT CMAKE_BUILD_TYPE )
-  SET( CMAKE_BUILD_TYPE Release CACHE STRING
-       "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel."
-       FORCE )
-ENDIF( NOT CMAKE_BUILD_TYPE )
+if (NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE
+      Release
+      CACHE
+        STRING
+        "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel."
+        FORCE
+  )
+endif (NOT CMAKE_BUILD_TYPE)
 
-INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include)
 
-MESSAGE (STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+if (APPLE)
+  include_directories(${CMAKE_SOURCE_DIR}/buildosx/include)
+elseif (QT_ANDROID)
+  include_directories(${CMAKE_SOURCE_DIR}/android)
+endif ()
 
-#SET(CMAKE_BUILD_TYPE Debug)
-SET(CMAKE_MACOSX_RPATH "ON")
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-INCLUDE("cmake/PluginConfigure.cmake")
+# SET(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_MACOSX_RPATH "ON")
 
-SET(SRC_WMM
-    src/wmm_pi.h
-    src/wmm_pi.cpp
-    src/MagneticPlotMap.h
-    src/MagneticPlotMap.cpp
+include("cmake/PluginConfigure.cmake")
+
+set(SRC_WMM
+    src/magnetic_plot_map.h
+    src/magnetic_plot_map.cpp
     src/icons.h
     src/icons.cpp
     src/GeomagnetismHeader.h
     src/GeomagnetismLibrary.c
     src/EGM9615.h
-    src/WmmUIDialog.h
-    src/WmmUIDialog.cpp
-    src/pi_TexFont.cpp
-    src/pi_TexFont.h
+    src/wmm_ui_dialog.h
+    src/wmm_ui_dialog.cpp
+    src/pi_tex_font.cpp
+    src/pi_tex_font.h
     src/pi_ocpndc.cpp
     src/pi_ocpndc.h
-    )
+    src/wmm_pi.h
+    src/wmm_pi.cpp
+)
 
-IF (QT_ANDROID )
-    SET(SRC_WMM ${SRC_WMM} src/pi_shaders.h)
-    SET(SRC_WMM ${SRC_WMM} src/pi_shaders.cpp)
-ENDIF (QT_ANDROID )
+if (QT_ANDROID)
+  set(SRC_WMM ${SRC_WMM} src/pi_shaders.h)
+  set(SRC_WMM ${SRC_WMM} src/pi_shaders.cpp)
+endif (QT_ANDROID)
 
-SET(SRC_JSON
-    src/json_defs.h
-    src/jsonreader.h
-    src/jsonval.h
-    src/jsonwriter.h
-    src/jsonreader.cpp
-    src/jsonval.cpp
-    src/jsonwriter.cpp
-    )
+add_library(${PACKAGE_NAME} SHARED ${SRC_WMM})
 
-ADD_LIBRARY(${PACKAGE_NAME} SHARED ${SRC_WMM} ${SRC_JSON})
+target_include_directories(
+  ${PACKAGE_NAME} BEFORE PRIVATE ${CMAKE_CURRENT_LIST_DIR}/include
+)
+target_link_libraries(${PACKAGE_NAME} PUBLIC ocpn::opencpn)
 
 if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang|AppleClang")
-    target_compile_options(${PACKAGE_NAME} PRIVATE
-        -Wno-unknown-pragmas
-        -Wno-overloaded-virtual
-    )
+  target_compile_options(
+    ${PACKAGE_NAME} PRIVATE -Wno-unknown-pragmas -Wno-overloaded-virtual
+  )
+elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+  target_compile_options( ${PACKAGE_NAME} PRIVATE -Wno-unknown-pragmas)
 endif ()
 
-
-IF (NOT QT_ANDROID )
-TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} PRIVATE 
-    ${wxWidgets_LIBRARIES}
-    ocpn::wxjson
-    ocpn::wxsvg
-    ocpn::opencpn 
-)
-ELSE (NOT QT_ANDROID )
-  TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} PRIVATE 
-    ocpn::wxjson 
-    "-lGLESv1_CM"
-    "-lGLESv2"
-    ${Qt_Base}/${Qt_Build}/lib/libQt5Gui.so 
-    ${Qt_Base}/${Qt_Build}/lib/libQt5Core.so 
-    ${Qt_Base}/${Qt_Build}/lib/libQt5Widgets.so
-    ${Qt_Base}/${Qt_Build}/lib/libQt5AndroidExtras.so
-    ${CMAKE_CURRENT_BINARY_DIR}/../../libgorp.so
+if (NOT QT_ANDROID)
+  target_link_libraries(
+    ${PACKAGE_NAME}
+      PRIVATE ${wxWidgets_LIBRARIES} ocpn::wxjson  ocpn::gl-headers
   )
-  
-  SET(CMAKE_SHARED_LINKER_FLAGS "-Wl,-soname,lib${PACKAGE_NAME}.so ")
-  SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-s")
-ENDIF(NOT QT_ANDROID)
+else (NOT QT_ANDROID)
+  target_link_libraries(
+    ${PACKAGE_NAME}
+    PRIVATE ocpn::wxjson
+            "-lGLESv1_CM"
+            "-lGLESv2"
+            ${Qt_Base}/${Qt_Build}/lib/libQt5Gui.so
+            ${Qt_Base}/${Qt_Build}/lib/libQt5Core.so
+            ${Qt_Base}/${Qt_Build}/lib/libQt5Widgets.so
+            ${Qt_Base}/${Qt_Build}/lib/libQt5AndroidExtras.so
+            ${CMAKE_CURRENT_BINARY_DIR}/../../libgorp.so
+  )
+  set(CMAKE_SHARED_LINKER_FLAGS "-Wl,-soname,lib${PACKAGE_NAME}.so ")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-s")
+endif (NOT QT_ANDROID)
 
-IF(WIN32)
-    TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} PRIVATE "GLU_static" )
-ENDIF(WIN32)
-    
+if (WIN32)
+  target_link_libraries(${PACKAGE_NAME} PRIVATE "GLU_static")
+endif (WIN32)
 
-IF( APPLE )
-    target_compile_options(${PACKAGE_NAME} PRIVATE
-        "-Wall" "-Wno-unused" "-fexceptions"
-        "-Wno-overloaded-virtual"
-        "-Wno-deprecated" "-Wno-deprecated-declarations"
-        "-Wno-unknown-pragmas"
-        "-D_WCHAR_H_CPLUSPLUS_98_CONFORMANCE_"
-    )
-ENDIF(APPLE)
+if (APPLE)
+  target_compile_options(
+    ${PACKAGE_NAME}
+    PRIVATE "-Wall"
+            "-Wno-unused"
+            "-fexceptions"
+            "-Wno-overloaded-virtual"
+            "-Wno-deprecated"
+            "-Wno-deprecated-declarations"
+            "-Wno-unknown-pragmas"
+            "-D_WCHAR_H_CPLUSPLUS_98_CONFORMANCE_"
+  )
+endif (APPLE)
 
-#target_link_libraries(${PACKAGE_NAME} ocpn::opencpn )
+# target_link_libraries(${PACKAGE_NAME} ocpn::opencpn )
+target_link_libraries(${PACKAGE_NAME} PRIVATE ocpn::manual)
 
 # Copy shared library to execution folder for debugging if not CI build
 if (NOT OCPN_CI_BUILD)
   if (MSVC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zi")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /DEBUG /OPT:REF /OPT:ICF")
     add_custom_command(
-      TARGET ${PACKAGE_NAME} POST_BUILD
+      TARGET ${PACKAGE_NAME}
+      POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E echo "Copying dll file"
-      COMMAND ${CMAKE_COMMAND} -E echo "$(TargetPath)" "${CMAKE_BINARY_DIR}/$(configuration)/plugins"
-      COMMAND ${CMAKE_COMMAND} -E copy "$(TargetPath)" "${CMAKE_BINARY_DIR}/$(configuration)/plugins"
+      COMMAND ${CMAKE_COMMAND} -E echo "$<TARGET_FILE:${PACKAGE_NAME}>"
+                "${CMAKE_BINARY_DIR}/$<CONFIGURATION>/plugins/${PACKAGE_NAME}.dll"
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:${PACKAGE_NAME}>"
+                "${CMAKE_BINARY_DIR}/$<CONFIGURATION>/plugins/${PACKAGE_NAME}.dll"
     )
-      if (CMAKE_BUILD_TYPE MATCHES "Debug")
-        add_custom_command(
-          COMMAND ${CMAKE_COMMAND} -E echo "Copying pdb file"
-          COMMAND ${CMAKE_COMMAND} -E echo "$(OutputPath)/$(TargetName).pdb" "${CMAKE_BINARY_DIR}/$(configuration)/plugins"
-          COMMAND ${CMAKE_COMMAND} -E copy "$(OutputPath)/$(TargetName).pdb" "${CMAKE_BINARY_DIR}/$(configuration)/plugins"
-        )
-      endif (CMAKE_BUILD_TYPE)
+    add_custom_command(
+      TARGET ${PACKAGE_NAME}
+      POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E echo "Copying pdb file"
+      COMMAND ${CMAKE_COMMAND} -E echo "$<TARGET_PDB_FILE:${PACKAGE_NAME}>"
+                "${CMAKE_BINARY_DIR}/$<CONFIGURATION>/plugins/${PACKAGE_NAME}.pdb"
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_PDB_FILE:${PACKAGE_NAME}>"
+                "${CMAKE_BINARY_DIR}/$<CONFIGURATION>/plugins/${PACKAGE_NAME}.pdb"
+    )
   endif (MSVC)
 endif (NOT OCPN_CI_BUILD)
 
-INCLUDE("cmake/PluginInstall.cmake")
-INCLUDE("cmake/PluginLocalization.cmake")
-INCLUDE("cmake/PluginPackage.cmake")
+include("cmake/PluginInstall.cmake")
+include("cmake/PluginLocalization.cmake")
+include("cmake/PluginPackage.cmake")

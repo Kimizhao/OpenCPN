@@ -1,13 +1,5 @@
-/******************************************************************************
- * $Id: chartcatalog.h,v 1.0 2011/02/26 01:54:37 nohal Exp $
- *
- * Project:  OpenCPN
- * Purpose:  Chart downloader Plugin
- * Author:   Pavel Kalian
- *
- ***************************************************************************
- *   Copyright (C) 2011 by Pavel Kalian   *
- *   $EMAIL$   *
+/**************************************************************************
+ *   Copyright (C) 2011 by Pavel Kalian                                    *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -20,254 +12,229 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
- ***************************************************************************
+ *   along with this program; if not, see <https://www.gnu.org/licenses/>. *
+ **************************************************************************/
+
+/**
+ * \file
+ *
+ * Chart Downloader Plugin  chart classes
+ *
  */
 
-#ifndef _CHARTCATALOG_H_
-#define _CHARTCATALOG_H_
+#ifndef CHARTCATALOG_H_
+#define CHARTCATALOG_H_
 
-#include "wx/wxprec.h"
+#include <memory>
+#include <vector>
 
-#ifndef  WX_PRECOMP
-  #include "wx/wx.h"
-#endif //precompiled headers
+#include <wx/wxprec.h>
+
+#ifndef WX_PRECOMP
+#include <wx/wx.h>
+#endif
 
 #include "pugixml.hpp"
 
-//Forward declarations
-class NoticeToMariners;
-class Vertex;
-class Panel;
-class Chart;
-class Location;
-class RiverMiles;
-class Area;
-class ChartFile;
-//WX_DECLARE_OBJARRAY(NoticeToMariners *, wxArrayOfNoticeToMariners);
-WX_DECLARE_OBJARRAY(Vertex, wxArrayOfVertexes);
-WX_DECLARE_OBJARRAY(Panel, wxArrayOfPanels);
-WX_DECLARE_OBJARRAY(Chart, wxArrayOfCharts);
+class NoticeToMariners;  // forward
+class Vertex;            // forward
+class Panel;             // forward
+class Chart;             // forward
+class Location;          // forward
+class RiverMiles;        // forward
+class Area;              // Forward
+class ChartFile;         // Forward
 
-//Declarations
-class ChartCatalog
-{
+// Declarations
+class ChartCatalog {
 public:
-    ChartCatalog();
-    ~ChartCatalog();
-    // public methods
-    bool LoadFromFile( wxString path, bool headerOnly = false );
-    bool LoadFromXml( pugi::xml_document *doc, bool headerOnly );
-    wxDateTime GetReleaseDate( void );
-    // public properties
-    wxString title;
-    wxDateTime date_created;
-    wxDateTime time_created;
-    wxDateTime date_valid;
-    wxDateTime time_valid;
-    wxDateTime dt_valid;
-    wxString ref_spec;
-    wxString ref_spec_vers;
-    wxString s62AgencyCode;
-    wxArrayOfCharts charts;
+  ChartCatalog() = default;
+  ~ChartCatalog() = default;
+  // public methods
+  bool LoadFromFile(const wxString &path, bool headerOnly = false);
+  bool LoadFromXml(pugi::xml_document *doc, bool headerOnly);
+  wxDateTime GetReleaseDate();
+  // public properties
+  wxString title;
+  wxDateTime date_created;
+  wxDateTime time_created;
+  wxDateTime date_valid;
+  wxDateTime time_valid;
+  wxDateTime dt_valid;
+  wxString ref_spec;
+  wxString ref_spec_vers;
+  wxString s62AgencyCode;
+  std::vector<std::unique_ptr<Chart>> charts;
+
 private:
-    bool ParseNoaaHeader( const pugi::xml_node &xmldata );
+  bool ParseNoaaHeader(const pugi::xml_node &xmldata);
 };
 
-class Chart
+class Chart {
+public:
+  Chart(pugi::xml_node &xmldata);
+  virtual ~Chart();
+  // public methods
+  virtual wxString GetChartTitle() { return title; }
+  virtual wxString GetDownloadLocation() { return zipfile_location; }
+  virtual bool NeedsManualDownload() { return manual_download_url != ""; }
+  virtual wxString GetManualDownloadUrl() { return manual_download_url; }
+  virtual wxString GetChartFilename(bool to_check);
+  virtual wxDateTime GetUpdateDatetime() { return zipfile_datetime_iso8601; }
+
+  // public properties
+  wxString number;  // chart number used for zip file name, BSB name, cell
+                    // number  .Paul.
+  wxString title;   // RNC: <title>, ENC:<lname>
+  wxArrayString *coast_guard_districts;
+  wxArrayString *states;
+  wxArrayString *regions;
+  wxString zipfile_location;
+  wxString target_filename;
+  wxDateTime zipfile_datetime;
+  wxDateTime zipfile_datetime_iso8601;
+  int zipfile_size;
+  int edtn;
+  int updn;
+  wxDateTime uadt;
+  wxDateTime isdt;
+  wxString reference_file;
+  wxString manual_download_url;
+
+  NoticeToMariners *nm;
+  NoticeToMariners *lnm;
+  std::vector<std::unique_ptr<Panel>> coverage;
+};
+
+class RasterChart : public Chart {
+public:
+  RasterChart(pugi::xml_node &xmldata);
+
+  int source_edition;
+  int raster_edition;
+  int ntm_edition;
+  wxString source_date;
+  wxString ntm_date;
+  wxString source_edition_last_correction;
+  wxString raster_edition_last_correction;
+  wxString ntm_edition_last_correction;
+};
+
+class EncCell : public Chart  //<cell>
 {
 public:
-    Chart( pugi::xml_node &xmldata );
-    virtual ~Chart();
-    // public methods
-    virtual wxString GetChartTitle() { return title; }
-    virtual wxString GetDownloadLocation() { return zipfile_location; }
-    virtual bool NeedsManualDownload() { return manual_download_url != wxEmptyString; }
-    virtual wxString GetManualDownloadUrl() { return manual_download_url; }
-    virtual wxString GetChartFilename( bool to_check = false );
-    virtual wxDateTime GetUpdateDatetime() { return zipfile_datetime_iso8601; }
+  EncCell(pugi::xml_node &xmldata);
 
-    // public properties
-    wxString number; // chart number used for zip file name, BSB name, cell number  .Paul. 
-    wxString title; //RNC: <title>, ENC:<lname>
-    wxArrayString *coast_guard_districts;
-    wxArrayString *states;
-    wxArrayString *regions;
-    wxString zipfile_location;
-    wxString target_filename;
-    wxDateTime zipfile_datetime;
-    wxDateTime zipfile_datetime_iso8601;
-    int zipfile_size;
-    wxString reference_file;
-    wxString manual_download_url;
-
-    NoticeToMariners *nm;
-    NoticeToMariners *lnm;
-    wxArrayOfPanels coverage;
+  wxString src_chart;
+  int cscale;
+  wxString status;
+  int edtn;
+  int updn;
+  wxDateTime uadt;
+  wxDateTime isdt;
 };
 
-class RasterChart : public Chart //<chart>
+class IEncCell : public Chart  //<Cell>
 {
 public:
-    RasterChart( pugi::xml_node &xmldata );
-    // public methods
+  IEncCell(pugi::xml_node &xmldata);
+  ~IEncCell() override;
+  // public methods
+  wxString GetChartTitle() override;
+  wxString GetDownloadLocation() override;
+  wxDateTime GetUpdateDatetime() override;
 
-    //public properties
-    int source_edition;
-    int raster_edition;
-    int ntm_edition;
-    wxString source_date;
-    wxString ntm_date;
-    wxString source_edition_last_correction;
-    wxString raster_edition_last_correction;
-    wxString ntm_edition_last_correction;
+  // public properties
+  Location *location;
+  wxString river_name;
+  RiverMiles *river_miles;
+  Area *area;
+  wxString edition;
+  ChartFile *shp_file;
+  ChartFile *s57_file;
+  ChartFile *kml_file;
 };
 
-class EncCell : public Chart //<cell>
+class ChartFile {
+public:
+  ChartFile(pugi::xml_node &xmldata);
+
+  wxString location;
+  wxDateTime date_posted;
+  wxDateTime time_posted;
+  int file_size;
+};
+
+class Location {
+public:
+  Location(pugi::xml_node &xmldata);
+  // public methods
+
+  // public properties
+  wxString from;
+  wxString to;
+};
+
+class RiverMiles {
+public:
+  RiverMiles(pugi::xml_node &xmldata);
+
+  double begin;
+  double end;
+};
+
+class Area {
+public:
+  Area(pugi::xml_node &xmldata);
+
+  double north;
+  double south;
+  double east;
+  double west;
+};
+
+class NoticeToMariners  // for <nm> and <lnm>
 {
 public:
-    EncCell( pugi::xml_node &xmldata );
-    // public methods
+  NoticeToMariners(pugi::xml_node &xmldata);
 
-    //public properties
-    //wxString name;  use wxString number in class Chart .Paul.
-    wxString src_chart;
-    int cscale;
-    wxString status;
-    int edtn;
-    int updn;
-    wxDateTime uadt;
-    wxDateTime isdt;
+  wxString agency;  //<nm_agency> or <lnm_agency>
+  wxString doc;
+  wxDateTime date;
 };
 
-class IEncCell : public Chart //<Cell>
-{
+class Vertex {
 public:
-    IEncCell( pugi::xml_node &xmldata );
-    ~IEncCell();
-    // public methods
-    wxString GetChartTitle();
-    wxString GetDownloadLocation();
-    wxDateTime GetUpdateDatetime();
+  Vertex(pugi::xml_node &xmldata);
+  virtual ~Vertex() = default;
 
-    //public properties
-    //wxString name;  use wxString number in class Chart .Paul.
-    Location *location;
-    wxString river_name;
-    RiverMiles *river_miles;
-    Area *area;
-    wxString edition;
-    ChartFile *shp_file;
-    ChartFile *s57_file;
-    ChartFile *kml_file;
+  double lat;
+  double lon;
 };
 
-class ChartFile
-{
+class Panel {
 public:
-    ChartFile( pugi::xml_node &xmldata );
-    // public methods
+  Panel(pugi::xml_node &xmldata);
+  virtual ~Panel() = default;
 
-    //public properties
-    wxString location;
-    wxDateTime date_posted;
-    wxDateTime time_posted;
-    int file_size;
+  int panel_no;
+  std::vector<Vertex> vertexes;
 };
 
-class Location
-{
+class RncPanel : public Panel {
 public:
-    Location( pugi::xml_node &xmldata );
-    // public methods
+  RncPanel(pugi::xml_node &xmldata);
 
-    //public properties
-    wxString from;
-    wxString to;
+  wxString panel_title;
+  wxString file_name;
+  int scale;
 };
 
-class RiverMiles
-{
+class EncPanel : public Panel {
 public:
-    RiverMiles( pugi::xml_node &xmldata );
-    // public methods
+  EncPanel(pugi::xml_node &xmldata);
 
-    //public properties
-    double begin;
-    double end;
+  wxString type;
 };
 
-class Area
-{
-public:
-    Area( pugi::xml_node &xmldata );
-    // public methods
-
-    //public properties
-    double north;
-    double south;
-    double east;
-    double west;
-};
-
-class NoticeToMariners //for <nm> and <lnm>
-{
-public:
-    NoticeToMariners( pugi::xml_node &xmldata );
-    // public methods
-
-    //public properties
-    wxString agency; //<nm_agency> or <lnm_agency>
-    wxString doc;
-    wxDateTime date;
-};
-
-class Vertex
-{
-public:
-    Vertex( pugi::xml_node &xmldata );
-    virtual ~Vertex() {};
-    // public methods
-
-    //public properties
-    double lat;
-    double lon;
-};
-
-class Panel
-{
-public:
-    Panel( pugi::xml_node &xmldata );
-    virtual ~Panel();
-    // public methods
-
-    //public properties
-    int panel_no;
-    wxArrayOfVertexes vertexes;
-};
-
-class RncPanel : public Panel
-{
-public:
-    RncPanel( pugi::xml_node &xmldata );
-    // public methods
-
-    //public properties
-    wxString panel_title;
-    wxString file_name;
-    int scale;
-};
-
-class EncPanel : public Panel
-{
-public:
-    EncPanel( pugi::xml_node &xmldata );
-    // public methods
-
-    //public properties
-    wxString type;
-};
-
-#endif //_CHARTCATALOG_H_
+#endif  // CHARTCATALOG_H_

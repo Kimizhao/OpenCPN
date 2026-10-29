@@ -1,12 +1,6 @@
-/******************************************************************************
- * $Id: gps.cpp, v1.0 2010/08/26 SethDart Exp $
- *
- * Project:  OpenCPN
- * Purpose:  Dashboard Plugin
- * Author:   Jean-Eudes Onfray
- *
- ***************************************************************************
- *   Copyright (C) 2010 by David S. Register   *
+/**************************************************************************
+ *   Copyright (C) 2010 by Jean-Eudes Onfray                               *
+ *   Copyright (C) 2010 by David S. Register                               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,322 +13,418 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.             *
- ***************************************************************************
+ *   along with this program; if not, see <https://www.gnu.org/licenses/>. *
+ **************************************************************************/
+
+/**
+ * \file
+ *
+ * Dashboard GPS instrument implementation
  */
 
-#include "gps.h"
-#include "wx28compat.h"
-
-// For compilers that support precompilation, includes "wx/wx.h".
 #include <wx/wxprec.h>
 
-#ifdef __BORLANDC__
-    #pragma hdrstop
+#ifndef WX_PRECOMP
+#include <wx/wx.h>
 #endif
 
-// for all others, include the necessary headers (this file is usually all you
-// need because it includes almost all "standard" wxWidgets headers)
-#ifndef WX_PRECOMP
-    #include <wx/wx.h>
-#endif
+#include "gps.h"
 
 // Required deg2rad
 #include "dial.h"
 
-DashboardInstrument_GPS::DashboardInstrument_GPS( wxWindow *parent, wxWindowID id, wxString title) :
-      DashboardInstrument(parent, id, title, OCPN_DBP_STC_GPS)
-{
-      m_cx = 35;
-      m_cy = 57;
-      m_radius = 35;
-      for (int idx = 0; idx < 12; idx++)
-      {
-            m_SatInfo[idx].SatNumber = 0;
-            m_SatInfo[idx].ElevationDegrees = 0;
-            m_SatInfo[idx].AzimuthDegreesTrue = 0;
-            m_SatInfo[idx].SignalToNoiseRatio = 0;
-      }
-      m_SatCount = 0;
-      talkerID = wxEmptyString;
-      for ( int i = 0; i < GNSS_SYSTEM; i++) {
-          m_Gtime[i] = 10000;
-      }
-      m_lastShift = wxDateTime::Now();
-      b_shift = false;
-      s_gTalker = wxEmptyString;
-      m_iMaster = 1; //Start with the GPS system
+DashboardInstrument_GPS::DashboardInstrument_GPS(
+    wxWindow* parent, wxWindowID id, wxString title,
+    InstrumentProperties* Properties)
+    : DashboardInstrument(parent, id, title, OCPN_DBP_STC_GPS, Properties) {
+  m_ref_dim = wxWindow::GetCharHeight() * 80 / 100;
+  m_ref_dim *= OCPN_GetWinDIPScaleFactor() < 1.0
+                   ? 2.0 * OCPN_GetWinDIPScaleFactor()
+                   : 1.0;  // 1.5
+
+  m_cx = 35;
+  m_cy = static_cast<int>(m_ref_dim * 35 / 10);
+  m_radius = m_ref_dim * 2;
+  m_scale_delta = m_ref_dim / 2;
+  m_scale_base = (m_radius * 2) + (2 * m_ref_dim);
+
+  for (int idx = 0; idx < 12; idx++) {
+    m_sat_info[idx].SatNumber = 0;
+    m_sat_info[idx].ElevationDegrees = 0;
+    m_sat_info[idx].AzimuthDegreesTrue = 0;
+    m_sat_info[idx].SignalToNoiseRatio = 0;
+  }
+  m_sat_count = 0;
+  talker_id = wxEmptyString;
+  for (int i = 0; i < GNSS_SYSTEM; i++) {
+    m_gtime[i] = 10000;
+  }
+  m_last_shift = wxDateTime::Now();
+  b_shift = false;
+  m_talker = wxEmptyString;
+  m_master = 1;  // Start with the GPS system
+  m_max_sat_count = 0;
 }
 
-wxSize DashboardInstrument_GPS::GetSize( int orient, wxSize hint )
-{
-      wxClientDC dc(this);
-      int w;
-      dc.GetTextExtent(m_title, &w, &m_TitleHeight, 0, 0, g_pFontTitle);
-      if( orient == wxHORIZONTAL ) {
-          m_cx = DefaultWidth/2;
-          return wxSize( DefaultWidth, wxMax(hint.y, m_TitleHeight+140) );
-      } else {
-          w = wxMax(hint.x, DefaultWidth);
-          m_cx = w/2;
-          return wxSize( w, m_TitleHeight+140 );
-      }
+wxSize DashboardInstrument_GPS::GetSize(int orient, wxSize hint) {
+  wxClientDC dc(this);
+  int w;
+  wxFont f;
+  if (m_Properties)
+    f = m_Properties->m_TitleFont.GetChosenFont();
+  else
+    f = g_pFontTitle->GetChosenFont();
+  dc.GetTextExtent(m_title, &w, &m_TitleHeight, nullptr, nullptr, &f);
+  w = (12 * m_ref_dim);  // Max 12 vertical bars
+  if (orient == wxHORIZONTAL) {
+    m_cx = w / 2;
+    return wxSize(w, wxMax(hint.y, m_TitleHeight + (m_ref_dim * 84 / 10)));
+  } else {
+    w = wxMax(hint.x, w);
+    m_cx = w / 2;
+    return wxSize(w, m_TitleHeight + (m_ref_dim * 84 / 10));
+  }
 }
 
-void DashboardInstrument_GPS::SetSatInfo(int cnt, int seq, wxString talk, SAT_INFO sats[4])
-{
-      m_SatCount = cnt;
-      talkerID = talk;
+void DashboardInstrument_GPS::SetSatInfo(int cnt, int seq, wxString talk,
+                                         SAT_INFO sats[4]) {
+  m_sat_count = cnt;
+  talker_id = talk;
 
-      // Some GPS receivers may emit more than 12 sats info
-      if (seq < 1 || seq > 3)
-          return;
-      
-      if (talkerID != wxEmptyString) {
-          // Switch view between the six GNSS system,
-          // mentioned in NMEA0183, when available.
-          // Show each system for 15 seconds.
-          // Time to shift?
-          wxDateTime now = wxDateTime::Now();
-          wxTimeSpan sinceLastShift = now - m_lastShift;
-          if (sinceLastShift.GetSeconds() >= 15){
-              b_shift = true;
-              m_lastShift = now;
-          }          
-          if (b_shift) {
-              //Who's here and in turn to show up next
-              bool secondturn = false;
-              int im = m_iMaster == GNSS_SYSTEM - 1 ? 0 : m_iMaster + 1;
-              for (int i = im; i < GNSS_SYSTEM; i++) {
-                  wxTimeSpan lastUpdate = now - m_Gtime[i];
-                  if (lastUpdate.GetSeconds() < 6) {
-                      m_iMaster = i;
-                      b_shift = false;
-                      break;
-                  }
-                  if (i == 5 && !secondturn) {
-                      i = -1;
-                      secondturn = true;                     
-                  }
-              }
-          }
-          if (talkerID == _T("GP")) {
-              m_Gtime[1] = now;
-              if (m_iMaster != 1) return;
-              s_gTalker = wxString::Format(_T("GPS\n%d"), m_SatCount);
-          }
-          else if (talkerID == _T("GL")){
-              m_Gtime[2] = now;
-              if (m_iMaster != 2) return;
-              s_gTalker = wxString::Format(_T("GLONASS\n%d"), m_SatCount);
-          }
-          else if (talkerID == _T("GA")){
-              m_Gtime[3] = now;
-              if (m_iMaster != 3) return;
-              s_gTalker = wxString::Format(_T("Galileo\n%d"), m_SatCount);
-          }
-          else if (talkerID == _T("GB")) { // BeiDou  BDS
-              m_Gtime[4] = now;
-              if (m_iMaster != 4) return;
-              s_gTalker = wxString::Format(_T("BeiDou\n%d"), m_SatCount);
-          }
-          else if (talkerID == _T("GI")) {
-              m_Gtime[5] = now;
-              if (m_iMaster != 5) return;
-              s_gTalker = wxString::Format(_T("NavIC\n%d"), m_SatCount);
-          }
-          else if (talkerID == _T("GQ")) {
-              m_Gtime[0] = now;
-              if (m_iMaster != 0) return;
-              s_gTalker = wxString::Format(_T("QZSS\n%d"), m_SatCount);
-          }
-          else s_gTalker = wxEmptyString;          
+  /* Some GNSS receivers may emit more than (3*4)=12 sats info.
+     We read the three first only since our graphic is
+     is not adapted for more than 12 satellites*/
+  if (seq < 1 || seq > 3) return;
+
+  if (talker_id != wxEmptyString) {
+    /* Switch view between the six GNSS system
+       mentioned in NMEA0183, when available.
+       Show each system for 20 seconds.
+       Time to shift now? */
+    wxDateTime now = wxDateTime::Now();
+    wxTimeSpan sinceLastShift = now - m_last_shift;
+    if (sinceLastShift.GetSeconds() > 20) {
+      b_shift = true;
+      m_last_shift = now;
+    }
+    if (b_shift) {
+      // Who's here and in turn to show up next
+      bool secondturn = false;
+      int im = m_master == GNSS_SYSTEM - 1 ? 0 : m_master + 1;
+      for (int i = im; i < GNSS_SYSTEM; i++) {
+        wxTimeSpan lastUpdate = now - m_gtime[i];
+        if (lastUpdate.GetSeconds() < 6) {
+          m_master = i;
+          b_shift = false;
+          m_max_sat_count = 0;
+          break;
+        }
+        if (i == 5 && !secondturn) {
+          i = -1;
+          secondturn = true;
+        }
       }
-            
-      int lidx = (seq-1)*4;
-      for (int idx = 0; idx < 4; idx++)
-      {
-            m_SatInfo[lidx+idx].SatNumber = sats[idx].SatNumber;
-            m_SatInfo[lidx+idx].ElevationDegrees = sats[idx].ElevationDegrees;
-            m_SatInfo[lidx+idx].AzimuthDegreesTrue = sats[idx].AzimuthDegreesTrue;
-            m_SatInfo[lidx+idx].SignalToNoiseRatio = sats[idx].SignalToNoiseRatio;
-      }
-      // Clean out possible leftovers.
-      for (int idx = m_SatCount; idx < 12; idx++) {
-          m_SatInfo[idx].SatNumber = 0;
-          m_SatInfo[idx].SignalToNoiseRatio = 0;
-      }
+    }
+    if (talker_id == "GP") {
+      m_gtime[1] = now;
+      if (m_master != 1) return;
+      // If two groups of messages in this sequence
+      // show only the first one with most(12) satellites
+      if (m_max_sat_count > m_sat_count)
+        return;
+      else
+        m_max_sat_count = m_sat_count;
+      m_talker = wxString::Format("GPS\n%d", m_sat_count);
+    } else if (talker_id == "GL") {
+      m_gtime[2] = now;
+      if (m_master != 2) return;
+      // See "GP" above
+      if (m_max_sat_count > m_sat_count)
+        return;
+      else
+        m_max_sat_count = m_sat_count;
+      m_talker = wxString::Format("GLONASS\n%d", m_sat_count);
+    } else if (talker_id == "GA") {
+      m_gtime[3] = now;
+      if (m_master != 3) return;
+      // See "GP" above
+      if (m_max_sat_count > m_sat_count)
+        return;
+      else
+        m_max_sat_count = m_sat_count;
+      m_talker = wxString::Format("Galileo\n%d", m_sat_count);
+    } else if (talker_id == "GB" || talker_id == "BD") {  // BeiDou  BDS
+      m_gtime[4] = now;
+      if (m_master != 4) return;
+      // See "GP" above
+      if (m_max_sat_count > m_sat_count)
+        return;
+      else
+        m_max_sat_count = m_sat_count;
+      m_talker = wxString::Format("BeiDou\n%d", m_sat_count);
+    } else if (talker_id == "GI") {
+      m_gtime[5] = now;
+      if (m_master != 5) return;
+      // See "GP" above
+      if (m_max_sat_count > m_sat_count)
+        return;
+      else
+        m_max_sat_count = m_sat_count;
+      m_talker = wxString::Format("NavIC\n%d", m_sat_count);
+    } else if (talker_id == "GQ") {
+      m_gtime[0] = now;
+      if (m_master != 0) return;
+      // See "GP" above
+      if (m_max_sat_count > m_sat_count)
+        return;
+      else
+        m_max_sat_count = m_sat_count;
+      m_talker = wxString::Format("QZSS\n%d", m_sat_count);
+    } else {
+      // Would be a not known N2k PGP type like "Combined GPS/GLONASS"
+      m_talker = wxString::Format("%s\n%d", talker_id, m_sat_count);
+    }
+  }
+
+  int lidx = (seq - 1) * 4;
+  for (int idx = 0; idx < 4; idx++) {
+    m_sat_info[lidx + idx].SatNumber = sats[idx].SatNumber;
+    m_sat_info[lidx + idx].ElevationDegrees = sats[idx].ElevationDegrees;
+    m_sat_info[lidx + idx].AzimuthDegreesTrue = sats[idx].AzimuthDegreesTrue;
+    m_sat_info[lidx + idx].SignalToNoiseRatio = sats[idx].SignalToNoiseRatio;
+  }
+  // Clean out possible leftovers.
+  for (int idx = m_sat_count; idx < 12; idx++) {
+    m_sat_info[idx].SatNumber = 0;
+    m_sat_info[idx].SignalToNoiseRatio = 0;
+  }
 }
 
-void DashboardInstrument_GPS::Draw(wxGCDC* dc)
-{
-      DrawFrame(dc);
-      DrawBackground(dc);
-      DrawForeground(dc);
+void DashboardInstrument_GPS::Draw(wxGCDC* dc) {
+  DrawFrame(dc);
+  DrawBackground(dc);
+  DrawForeground(dc);
 }
 
-void DashboardInstrument_GPS::DrawFrame(wxGCDC* dc)
-{
-      wxSize size = GetClientSize();
-      wxColour cb;
+void DashboardInstrument_GPS::DrawFrame(wxGCDC* dc) {
+  wxSize size = GetClientSize();
+  wxColour cb;
+  if (m_Properties)
+    cb = GetColourSchemeBackgroundColour(m_Properties->m_DataBackgroundColour);
+  else
+    GetGlobalColor("DASHB", &cb);
+  dc->SetTextBackground(cb);
+  dc->SetBackgroundMode(wxSOLID);
 
-      GetGlobalColor(_T("DASHB"), &cb);
-      dc->SetTextBackground(cb);
-      dc->SetBackgroundMode(wxSOLID);
+  wxColour cl;
+  if (m_Properties)
+    cl = GetColourSchemeBackgroundColour(m_Properties->m_TitleBackgroundColour);
+  else
+    GetGlobalColor("DASHL", &cl);
+  dc->SetTextForeground(cl);
+  dc->SetBrush(*wxTRANSPARENT_BRUSH);
 
-      wxColour cl;
-      GetGlobalColor(_T("DASHL"), &cl);
-      dc->SetTextForeground(cl);
-      dc->SetBrush(*wxTRANSPARENT_BRUSH);
+  wxPen pen;
+  pen.SetStyle(wxPENSTYLE_SOLID);
+  wxColour cf;
+  GetGlobalColor("DASHF", &cf);
+  pen.SetColour(cf);
+  pen.SetWidth(1);
+  dc->SetPen(pen);
 
-      wxPen pen;
-      pen.SetStyle(wxPENSTYLE_SOLID);
-      wxColour cf;
-      GetGlobalColor(_T("DASHF"), &cf);
-      pen.SetColour(cf);
-      pen.SetWidth(1);
-      dc->SetPen(pen);
+  dc->DrawCircle(m_cx, m_cy, m_radius);
+  if (m_Properties)
+    dc->SetFont((m_Properties->m_SmallFont.GetChosenFont()));
+  else
+    dc->SetFont((g_pFontSmall->GetChosenFont()));
 
-      dc->DrawCircle(m_cx, m_cy, m_radius);
+  wxScreenDC sdc;
+  int height, width;
+  wxFont f;
+  if (m_Properties)
+    f = m_Properties->m_SmallFont.GetChosenFont();
+  else
+    f = g_pFontSmall->GetChosenFont();
+  sdc.GetTextExtent("W", &width, &height, nullptr, nullptr, &f);
 
-      dc->SetFont(*g_pFontSmall);
+  wxBitmap tbm(width, height, -1);
+  wxMemoryDC tdc(tbm);
+  tdc.SetBackground(cb);
+  // tdc.SetTextForeground(cl);
+  tdc.SetTextBackground(cb);
+  tdc.SetBackgroundMode(wxSOLID);
+  if (m_Properties) {
+    tdc.SetFont(m_Properties->m_SmallFont.GetChosenFont());
+    tdc.SetTextForeground(
+        GetColourSchemeFont(m_Properties->m_SmallFont.GetColour()));
+  } else {
+    tdc.SetFont(g_pFontSmall->GetChosenFont());
+    tdc.SetTextForeground(GetColourSchemeFont(g_pFontSmall->GetColour()));
+  }
+  tdc.Clear();
+  tdc.DrawText(_("N"), 0, 0);
+  dc->Blit(m_cx - 3, m_cy - m_radius - 6, width, height, &tdc, 0, 0);
 
-      wxScreenDC sdc;
-      int height, width;
-      sdc.GetTextExtent(_T("W"), &width, &height, NULL, NULL, g_pFontSmall);
+  tdc.Clear();
+  tdc.DrawText(_("E"), 0, 0);
+  dc->Blit(m_cx + m_radius - 4, m_cy - 5, width, height, &tdc, 0, 0);
 
-      wxBitmap tbm( width, height, -1 );
-      wxMemoryDC tdc( tbm );
-      tdc.SetBackground( cb );
-      tdc.SetTextForeground( cl );
-      tdc.SetTextBackground(cb);
-      tdc.SetBackgroundMode(wxSOLID);
-      tdc.SetFont(*g_pFontSmall );
+  tdc.Clear();
+  tdc.DrawText(_("S"), 0, 0);
+  dc->Blit(m_cx - 3, m_cy + m_radius - 6, width, height, &tdc, 0, 0);
 
-        tdc.Clear();
-        tdc.DrawText(_("N"), 0,0);
-        dc->Blit(m_cx-3, m_cy-m_radius-6, width, height, &tdc, 0, 0);
+  tdc.Clear();
+  tdc.DrawText(_("W"), 0, 0);
+  dc->Blit(m_cx - m_radius - 4, m_cy - 5, width, height, &tdc, 0, 0);
 
-        tdc.Clear();
-        tdc.DrawText(_("E"), 0,0);
-        dc->Blit(m_cx+m_radius-4, m_cy-5, width, height, &tdc, 0, 0);
+  tdc.SelectObject(wxNullBitmap);
 
-        tdc.Clear();
-        tdc.DrawText(_("S"), 0,0);
-        dc->Blit(m_cx-3, m_cy+m_radius-6, width, height, &tdc, 0, 0);
+  dc->SetBackgroundMode(wxTRANSPARENT);
 
-        tdc.Clear();
-        tdc.DrawText(_("W"), 0,0);
-        dc->Blit(m_cx-m_radius-4, m_cy-5, width, height, &tdc, 0, 0);
+  dc->DrawLine(3, m_scale_base, size.x - 3, m_scale_base);
+  dc->DrawLine(3, m_scale_base + 4 * m_scale_delta, size.x - 3,
+               m_scale_base + 4 * m_scale_delta);
 
-      tdc.SelectObject( wxNullBitmap );
+  pen.SetStyle(wxPENSTYLE_DOT);
+  dc->SetPen(pen);
+  dc->DrawCircle(m_cx, m_cy, m_radius * sin(deg2rad(45)));
+  dc->DrawCircle(m_cx, m_cy, m_radius * sin(deg2rad(20)));
 
-      dc->SetBackgroundMode(wxTRANSPARENT);
-
-      dc->DrawLine(3, 100, size.x-3, 100);
-      dc->DrawLine(3, 140, size.x-3, 140);
-
-      pen.SetStyle(wxPENSTYLE_DOT);
-      dc->SetPen(pen);
-      dc->DrawCircle(m_cx, m_cy, m_radius * sin(deg2rad(45)));
-      dc->DrawCircle(m_cx, m_cy, m_radius * sin(deg2rad(20)));
-
-      //        wxSHORT_DASH is not supported on GTK, and it destroys the pen.
+  //        wxSHORT_DASH is not supported on GTK, and it destroys the pen.
 #ifndef __WXGTK__
-      pen.SetStyle(wxPENSTYLE_SHORT_DASH);
-      dc->SetPen(pen);
+  pen.SetStyle(wxPENSTYLE_SHORT_DASH);
+  dc->SetPen(pen);
 #endif
-      dc->DrawLine(3, 110, size.x-3, 110);
-      dc->DrawLine(3, 120, size.x-3, 120);
-      dc->DrawLine(3, 130, size.x-3, 130);
+  dc->DrawLine(3, m_scale_base + 1 * m_scale_delta, size.x - 3,
+               m_scale_base + 1 * m_scale_delta);
+  dc->DrawLine(3, m_scale_base + 2 * m_scale_delta, size.x - 3,
+               m_scale_base + 2 * m_scale_delta);
+  dc->DrawLine(3, m_scale_base + 3 * m_scale_delta, size.x - 3,
+               m_scale_base + 3 * m_scale_delta);
 }
 
-void DashboardInstrument_GPS::DrawBackground(wxGCDC* dc)
-{
-      // Draw SatID
+void DashboardInstrument_GPS::DrawBackground(wxGCDC* dc) {
+  // Draw SatID
+  wxFont f;
+  wxScreenDC sdc;
+  int height, width;
+  if (m_Properties)
+    f = m_Properties->m_SmallFont.GetChosenFont();
+  else
+    f = g_pFontSmall->GetChosenFont();
+  sdc.GetTextExtent("W", &width, &height, nullptr, nullptr, &f);
 
-      wxScreenDC sdc;
-      int height, width;
-      sdc.GetTextExtent(_T("W"), &width, &height, NULL, NULL, g_pFontSmall);
+  wxColour cl;
+  wxBitmap tbm(dc->GetSize().x, height, -1);
+  wxMemoryDC tdc(tbm);
+  wxColour c2;
+  if (m_Properties)
+    c2 = GetColourSchemeBackgroundColour(m_Properties->m_DataBackgroundColour);
+  else
+    GetGlobalColor("DASHB", &c2);
+  tdc.SetBackground(c2);
+  tdc.Clear();
 
-      wxColour cl;
-      wxBitmap tbm( dc->GetSize().x, height, -1 );
-      wxMemoryDC tdc( tbm );
-      wxColour c2;
-      GetGlobalColor( _T("DASHB"), &c2 );
-      tdc.SetBackground( c2 );
-      tdc.Clear();
+  if (m_Properties) {
+    tdc.SetFont(m_Properties->m_SmallFont.GetChosenFont());
+    cl = GetColourSchemeFont(m_Properties->m_SmallFont.GetColour());
+  } else {
+    tdc.SetFont(g_pFontSmall->GetChosenFont());
+    GetGlobalColor("DASHF", &cl);
+  }
+  tdc.SetTextForeground(cl);
+  tdc.SetTextBackground(c2);
 
-      tdc.SetFont(*g_pFontSmall );
-      GetGlobalColor( _T("DASHF"), &cl );
-      tdc.SetTextForeground( cl );
+  int pitch = m_ref_dim;
+  int offset = m_ref_dim * 15 / 100;
+  for (int idx = 0; idx < 12; idx++) {
+    if (m_sat_info[idx].SatNumber) {
+      wxString satno = wxString::Format("%02d", m_sat_info[idx].SatNumber);
+      // Avoid three digit sat-number here. Especially for BeiDou(GB/BD)
+      satno = satno.Right(2);
+      tdc.DrawText(satno, idx * pitch + offset, 0);
+    } else
+      tdc.DrawText(" -", idx * pitch + offset, 0);
+  }
 
-      for (int idx = 0; idx < 12; idx++)
-      {
-            if (m_SatInfo[idx].SatNumber)
-                  tdc.DrawText(wxString::Format(_T("%02d"), m_SatInfo[idx].SatNumber), idx*16+5, 0);
-      }
-      
-      tdc.SelectObject( wxNullBitmap );
-      dc->DrawBitmap(tbm, 0, 142, false);
+  tdc.SelectObject(wxNullBitmap);
 
+  int scaleDelta = m_ref_dim / 2;
+  int scaleBase = (m_radius * 2) + (2 * m_ref_dim);
+
+  dc->DrawBitmap(tbm, 0, scaleBase + (scaleDelta * 45 / 10), false);
 }
 
-void DashboardInstrument_GPS::DrawForeground( wxGCDC* dc )
-{
-    wxColour cl;
-    GetGlobalColor( _T("DASHL"), &cl );
-    wxBrush brush( cl );
-    dc->SetBrush( brush );
-    dc->SetPen( *wxTRANSPARENT_PEN);
-    dc->SetTextBackground( cl );
+void DashboardInstrument_GPS::DrawForeground(wxGCDC* dc) {
+  wxColour cl;
+  if (m_Properties)
+    cl = GetColourSchemeFont(m_Properties->m_DataFont.GetColour());
+  else
+    cl = GetColourSchemeFont(g_pFontData->GetColour());
+  // GetGlobalColor("DASHL", &cl);
+  wxBrush brush(cl);
+  dc->SetBrush(brush);
+  dc->SetPen(*wxTRANSPARENT_PEN);
+  dc->SetTextBackground(cl);
 
-    wxColor cf;
-    GetGlobalColor( _T("DASHF"), &cf );
-    dc->SetTextForeground( cf );
-    dc->SetBackgroundMode( wxSOLID );
+  wxColor cf;
+  GetGlobalColor("DASHF", &cf);
+  dc->SetTextForeground(cf);
+  dc->SetBackgroundMode(wxSOLID);
 
-    wxColour cb;
-    GetGlobalColor( _T("DASHB"), &cb );
+  wxColour cb;
+  if (m_Properties)
+    cb = GetColourSchemeBackgroundColour(m_Properties->m_TitleBackgroundColour);
+  else
+    GetGlobalColor("DASHL", &cb);
 
-    for( int idx = 0; idx < 12; idx++ ) {
-        if( m_SatInfo[idx].SignalToNoiseRatio ) {
-            int h = m_SatInfo[idx].SignalToNoiseRatio * 0.4;
-            dc->DrawRectangle( idx * 16 + 5, 140 - h, 13, h );
-        }
+  dc->SetTextBackground(cb);
+
+  int m_scaleDelta = m_ref_dim / 2;
+  int m_scaleBase = (m_radius * 2) + (2 * m_ref_dim);
+  int pitch = m_ref_dim;
+  int offset = m_ref_dim * 12 / 100;
+
+  for (int idx = 0; idx < 12; idx++) {
+    if (m_sat_info[idx].SignalToNoiseRatio) {
+      int h = m_sat_info[idx].SignalToNoiseRatio * m_ref_dim / 24;  // 0.4;
+      dc->DrawRectangle(idx * pitch + offset,
+                        m_scaleBase + (4 * m_scaleDelta) - h, pitch * 60 / 100,
+                        h);
     }
+  }
 
-    wxString label;
-    for( int idx = 0; idx < 12; idx++ ) {
-        if( m_SatInfo[idx].SignalToNoiseRatio ) {
-            label.Printf( _T("%02d"), m_SatInfo[idx].SatNumber );
-            int width, height;
-            wxScreenDC sdc;
-            sdc.GetTextExtent( label, &width, &height, 0, 0, g_pFontSmall );
+  wxString label = "00";
+  wxFont f;
+  int width, height;
+  wxScreenDC sdc;
+  if (m_Properties)
+    f = m_Properties->m_SmallFont.GetChosenFont();
+  else
+    f = g_pFontSmall->GetChosenFont();
 
-            wxBitmap tbm( width, height, -1 );
-            wxMemoryDC tdc( tbm );
-            tdc.SetBackground( cb );
-            tdc.Clear();
+  sdc.GetTextExtent(label, &width, &height, nullptr, nullptr, &f);
+  dc->SetFont(f);
+  dc->SetBackgroundMode(wxTRANSPARENT);
 
-            tdc.SetFont(*g_pFontSmall );
-            tdc.SetTextForeground( cf );
-            tdc.SetBackgroundMode( wxSOLID );
-            tdc.SetTextBackground( cl );
-
-            tdc.DrawText( label, 0, 0 );
-            tdc.SelectObject( wxNullBitmap );
-
-            int posx = m_cx + m_radius * cos( deg2rad( m_SatInfo[idx].AzimuthDegreesTrue - ANGLE_OFFSET ) )
-                            * sin( deg2rad( ANGLE_OFFSET - m_SatInfo[idx].ElevationDegrees ) ) - width / 2;
-            int posy = m_cy + m_radius * sin( deg2rad( m_SatInfo[idx].AzimuthDegreesTrue - ANGLE_OFFSET ) )
-                            * sin( deg2rad( ANGLE_OFFSET - m_SatInfo[idx].ElevationDegrees ) ) - height / 2;
-             dc->DrawBitmap( tbm, posx, posy, false );
-        }
+  for (int idx = 0; idx < 12; idx++) {
+    if (m_sat_info[idx].SignalToNoiseRatio) {
+      label.Printf("%02d", m_sat_info[idx].SatNumber);
+      int posx =
+          m_cx +
+          m_radius *
+              cos(deg2rad(m_sat_info[idx].AzimuthDegreesTrue - ANGLE_OFFSET)) *
+              sin(deg2rad(ANGLE_OFFSET - m_sat_info[idx].ElevationDegrees)) -
+          width / 2.0;
+      int posy =
+          m_cy +
+          m_radius *
+              sin(deg2rad(m_sat_info[idx].AzimuthDegreesTrue - ANGLE_OFFSET)) *
+              sin(deg2rad(ANGLE_OFFSET - m_sat_info[idx].ElevationDegrees)) -
+          height / 2.0;
+      dc->DrawText(label, posx, posy);
     }
-    if (talkerID != wxEmptyString) 
-        dc->DrawText( s_gTalker, 1, 15);
+  }
+  dc->SetBackgroundMode(wxSOLID);
+  if (talker_id != wxEmptyString) dc->DrawText(m_talker, 1, m_ref_dim * 3 / 2);
 }
-
